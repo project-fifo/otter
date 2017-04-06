@@ -62,7 +62,7 @@ start(Name, TraceId)
     start(Name, TraceId, undefined);
 start(Name, ParentSpan)
   when is_record(ParentSpan, span) ->
-    {TraceId, ParentId} = otters_span:fget_ids(ParentSpan),
+    {TraceId, ParentId} = ids(ParentSpan),
     start(Name, TraceId, ParentId).
 
 -spec start(info(), integer(), integer()| undefined) ->
@@ -153,49 +153,18 @@ ids(Span)
 %% counter is noticed. These snapshots (referred as Snap) and counters
 %% can be retrieved, managed with this API
 
--spec counter_list() -> [{list(), integer()}].
-counter_list() ->
-    otters_snapshot_count:list_counts().
+%% -spec counter_list() -> [{list(), integer()}].
+%% counter_list() ->
+%%     otters_snapshot_count:list_counts().
 
--spec counter_snapshot(list()) -> term().
-counter_snapshot(Key) ->
-    otters_snapshot_count:get_snap(Key).
+%% -spec counter_snapshot(list()) -> term().
+%% counter_snapshot(Key) ->
+%%     otters_snapshot_count:get_snap(Key).
 
--spec counter_delete(list()) -> ok.
-counter_delete(Key) ->
-    otters_snapshot_count:delete_counter(Key).
+%% -spec counter_delete(list()) -> ok.
+%% counter_delete(Key) ->
+%%     otters_snapshot_count:delete_counter(Key).
 
--spec counter_delete_all() -> ok.
-counter_delete_all() ->
-    otters_snapshot_count:delete_all_counters().
-
-
-%% ========================== Config API ============================
-%% The default implementation uses the application environment to
-%% store configuration. There is a simple wrapper module to interface
-%% with configuration store (otters_config). To implementat other config
-%% persistence, the module should be replaced with another one providing
-%% the same simple read/write API functions.
-%% WARNING : In the default implementation using the application
-%% environment, so the write function is NOT persistent. In case of node
-%% restart and/or application reload the configuration will be reset to
-%% whatever environment is defined in the release (sys) config or app
-%% file. There is an example configuration provided in the otters.app
-%% file as a reference.
-
--spec config_list() -> term().
-config_list() ->
-    otters_config:list().
-
--spec config_read(atom()) -> term().
-config_read(Key) ->
-    otters_config:read(Key).
-
--spec config_read(atom(), term()) -> term().
-config_read(Key, Default) ->
-    otters_config:read(Key, Default).
-
--spec config_write(atom(), term()) -> ok.
-config_write(Key, Value) ->
-    otters_config:write(Key, Value).
-
+%% -spec counter_delete_all() -> ok.
+%% counter_delete_all() ->
+%%     otters_snapshot_count:delete_all_counters().

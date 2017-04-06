@@ -18,6 +18,20 @@
 %%%
 %%%-------------------------------------------------------------------
 
+
+%% ========================== Config API ============================
+%% The default implementation uses the application environment to
+%% store configuration. There is a simple wrapper module to interface
+%% with configuration store (otters_config). To implementat other config
+%% persistence, the module should be replaced with another one providing
+%% the same simple read/write API functions.
+%% WARNING : In the default implementation using the application
+%% environment, so the write function is NOT persistent. In case of node
+%% restart and/or application reload the configuration will be reset to
+%% whatever environment is defined in the release (sys) config or app
+%% file. There is an example configuration provided in the otters.app
+%% file as a reference.
+
 -module(otters_config).
 -compile(export_all).
 
