@@ -30,15 +30,16 @@
 
 sup_init() ->
     [
-        ets:new(
-            Tab,
-            [named_table, public | TableProps ]
-        ) ||
-        {Tab, TableProps} <- [
-            {otters_zipkin_buffer1, [{write_concurrency, true}, {keypos, 2}]},
-            {otters_zipkin_buffer2, [{write_concurrency, true}, {keypos, 2}]},
-            {otters_zipkin_status,  [{read_concurrency, true}]}
-        ]
+     ets:new(
+       Tab,
+       [named_table, public | TableProps ]
+      ) ||
+        {Tab, TableProps} <-
+            [
+             {otters_zipkin_buffer1, [{write_concurrency, true}, {keypos, 2}]},
+             {otters_zipkin_buffer2, [{write_concurrency, true}, {keypos, 2}]},
+             {otters_zipkin_status,  [{read_concurrency, true}]}
+            ]
     ],
     ets:insert(otters_zipkin_status, {current_buffer, otters_zipkin_buffer1}),
     SendInterval = otters_config:read(zipkin_batch_interval_ms, 100),
@@ -51,11 +52,11 @@ store_span(Span) ->
 send_buffer() ->
     [{_, Buffer}] = ets:lookup(otters_zipkin_status, current_buffer),
     NewBuffer = case Buffer of
-        otters_zipkin_buffer1 ->
-            otters_zipkin_buffer2;
-        otters_zipkin_buffer2 ->
-            otters_zipkin_buffer1
-    end,
+                    otters_zipkin_buffer1 ->
+                        otters_zipkin_buffer2;
+                    otters_zipkin_buffer2 ->
+                        otters_zipkin_buffer1
+                end,
     ets:insert(otters_zipkin_status, {current_buffer, NewBuffer}),
     case ets:tab2list(Buffer) of
         [] ->
@@ -65,15 +66,15 @@ send_buffer() ->
             case send_batch_to_zipkin(Spans) of
                 {ok, 202} ->
                     otters_snapshot_count:snapshot(
-                        [?MODULE, send_buffer, ok],
-                        [{spans, length(Spans)}]);
+                      [?MODULE, send_buffer, ok],
+                      [{spans, length(Spans)}]);
                 Error ->
                     otters_snapshot_count:snapshot(
-                        [?MODULE, send_buffer, failed],
-                        [
-                            {spans, length(Spans)},
-                            {error, Error}
-                        ])
+                      [?MODULE, send_buffer, failed],
+                      [
+                       {spans, length(Spans)},
+                       {error, Error}
+                      ])
             end
     end.
 
@@ -87,26 +88,27 @@ send_batch_to_zipkin(ZipkinURL, Spans) ->
 
 send_spans_http(ZipkinURL, Data) ->
     send_spans_http(application:get_env(otters, http_client, ibrowse),
-		    ZipkinURL, Data).
+                    ZipkinURL, Data).
 
 send_spans_http(ibrowse, ZipkinURL, Data) ->
     case ibrowse:send_req(
-        ZipkinURL,
-        [{"content-type", "application/x-thrift"}],
-        post,
-        Data
-     ) of
-	{ok, SCode, _, _} ->
-	    {ok, list_to_integer(SCode)};
-	Err ->
-	    Err
+           ZipkinURL,
+           [{"content-type", "application/x-thrift"}],
+           post,
+           Data
+          ) of
+        {ok, SCode, _, _} ->
+            {ok, list_to_integer(SCode)};
+        Err ->
+            Err
     end;
 send_spans_http(httpc, ZipkinURL, Data) ->
-    case httpc:request(post, {ZipkinURL, [], "application/x-thrift", Data}, [], []) of
-	{ok, {{_, SCode, _}, _, _}} ->
-	    {ok, SCode};
-	Err ->
-	    Err
+    case httpc:request(post, {ZipkinURL, [], "application/x-thrift", Data},
+                       [], []) of
+        {ok, {{_, SCode, _}, _, _}} ->
+            {ok, SCode};
+        Err ->
+            Err
     end.
 
 encode_spans(Spans) ->
@@ -117,44 +119,45 @@ decode_spans(Data) ->
     [struct_to_span(S) || S <- StructList].
 
 span_to_struct(#span{
-    id = Id,
-    trace_id = TraceId,
-    name = Name,
-    parent_id = ParentId,
-    logs = Logs,
-    tags = Tags,
-    timestamp = Timestamp,
-    duration = Duration
-}) ->
-    FinalTags = case otters_config:read(zipkin_add_host_tag_to_span, undefined) of
-        {Key, Value} ->
-            [{Key, Value, default} | Tags];
-        _ ->
-            Tags
-    end,
+                  id = Id,
+                  trace_id = TraceId,
+                  name = Name,
+                  parent_id = ParentId,
+                  logs = Logs,
+                  tags = Tags,
+                  timestamp = Timestamp,
+                  duration = Duration
+                 }) ->
+    FinalTags =
+        case otters_config:read(zipkin_add_host_tag_to_span, undefined) of
+            {Key, Value} ->
+                [{Key, Value, default} | Tags];
+            _ ->
+                Tags
+        end,
     [
-        {1, i64, TraceId},
-        {3, string, otters_lib:to_bin(Name)},
-        {4, i64, Id}
+     {1, i64, TraceId},
+     {3, string, otters_lib:to_bin(Name)},
+     {4, i64, Id}
     ] ++
-    case ParentId of
-        undefined ->
-            [];
-        ParentId ->
-            [{5, i64, ParentId}]
-    end ++
-    [
-        {6, list, {
-            struct,
-            [log_to_annotation(Log) || Log <- Logs]
-        }},
-        {8, list, {
-            struct,
-            [tag_to_binary_annotation(Tag) || Tag <- FinalTags]
-        }},
-        {10, i64, Timestamp},
-        {11, i64, Duration}
-    ].
+        case ParentId of
+            undefined ->
+                [];
+            ParentId ->
+                [{5, i64, ParentId}]
+        end ++
+        [
+         {6, list, {
+               struct,
+               [log_to_annotation(Log) || Log <- Logs]
+              }},
+         {8, list, {
+               struct,
+               [tag_to_binary_annotation(Tag) || Tag <- FinalTags]
+              }},
+         {10, i64, Timestamp},
+         {11, i64, Duration}
+        ].
 
 log_to_annotation({Timestamp, Text}) ->
     case otters_config:read(zipkin_add_default_service_to_logs, false) of
@@ -162,15 +165,15 @@ log_to_annotation({Timestamp, Text}) ->
             log_to_annotation({Timestamp, Text, default});
         false ->
             [
-                {1, i64, Timestamp},
-                {2, string, otters_lib:to_bin(Text)}
+             {1, i64, Timestamp},
+             {2, string, otters_lib:to_bin(Text)}
             ]
     end;
 log_to_annotation({Timestamp, Text, Service}) ->
     [
-        {1, i64, Timestamp},
-        {2, string, otters_lib:to_bin(Text)},
-        {3,struct, host_to_struct(Service)}
+     {1, i64, Timestamp},
+     {2, string, otters_lib:to_bin(Text)},
+     {3, struct, host_to_struct(Service)}
     ].
 
 tag_to_binary_annotation({Key, Value}) ->
@@ -179,36 +182,36 @@ tag_to_binary_annotation({Key, Value}) ->
             tag_to_binary_annotation({Key, Value, default});
         false ->
             [
-                {1, string, otters_lib:to_bin(Key)},
-                {2, string, otters_lib:to_bin(Value)},
-                {3,i32,6}
+             {1, string, otters_lib:to_bin(Key)},
+             {2, string, otters_lib:to_bin(Value)},
+             {3, i32, 6}
             ]
     end;
 tag_to_binary_annotation({Key, Value, Service}) ->
     [
-        {1, string, otters_lib:to_bin(Key)},
-        {2, string, otters_lib:to_bin(Value)},
-        {3,i32,6},
-        {4,struct, host_to_struct(Service)}
+     {1, string, otters_lib:to_bin(Key)},
+     {2, string, otters_lib:to_bin(Value)},
+     {3, i32, 6},
+     {4, struct, host_to_struct(Service)}
     ].
 
 host_to_struct(default) ->
     DefaultService = otters_config:read(
-        zipkin_tag_host_service,
-        atom_to_list(node())
-    ),
+                       zipkin_tag_host_service,
+                       atom_to_list(node())
+                      ),
     host_to_struct(DefaultService);
 host_to_struct(Service) when is_binary(Service) orelse is_list(Service) ->
     host_to_struct({
-        Service,
-        otters_config:read(zipkin_tag_host_ip, {127,0,0,1}),
-        otters_config:read(zipkin_tag_host_port, 0)
-    });
+                     Service,
+                     otters_config:read(zipkin_tag_host_ip, {127, 0, 0, 1}),
+                     otters_config:read(zipkin_tag_host_port, 0)
+                   });
 host_to_struct({Service, Ip, Port}) ->
     [
-        {1,i32, otters_lib:ip_to_i32(Ip)},
-        {2,i16, Port},
-        {3,string, Service}
+     {1, i32, otters_lib:ip_to_i32(Ip)},
+     {2, i16, Port},
+     {3, string, Service}
     ].
 
 struct_to_span(StructData) ->
@@ -226,7 +229,8 @@ struct_to_span([{6, list, {struct, Annotations}}| Rest], Span) ->
     Logs = [annotation_to_log(Annotation) || Annotation <- Annotations],
     struct_to_span(Rest, Span#span{logs = Logs});
 struct_to_span([{8, list, {struct, BinAnnotations}}| Rest], Span) ->
-    Tags = [bin_annotation_to_tag(BinAnnotation) || BinAnnotation <- BinAnnotations],
+    Tags = [bin_annotation_to_tag(BinAnnotation) ||
+               BinAnnotation <- BinAnnotations],
     struct_to_span(Rest, Span#span{tags = Tags});
 struct_to_span([{10, i64, Timestamp}| Rest], Span) ->
     struct_to_span(Rest, Span#span{timestamp = Timestamp});
@@ -238,7 +242,7 @@ struct_to_span([], Span) ->
     Span.
 
 annotation_to_log(StructData) ->
-    annotation_to_log(StructData, {undefined,undefined,undefined}).
+    annotation_to_log(StructData, {undefined, undefined, undefined}).
 
 annotation_to_log([{1, i64, Timestamp} | Rest], {_, Text, Host}) ->
     annotation_to_log(Rest, {Timestamp, Text, Host});
@@ -254,7 +258,7 @@ annotation_to_log([], Log) ->
     Log.
 
 bin_annotation_to_tag(StructData) ->
-    bin_annotation_to_tag(StructData, {undefined,undefined,undefined}).
+    bin_annotation_to_tag(StructData, {undefined, undefined, undefined}).
 
 bin_annotation_to_tag([{1, string, Key} | Rest], {_, Value, Host}) ->
     bin_annotation_to_tag(Rest, {Key, Value, Host});
@@ -315,10 +319,10 @@ encode({i64, Val}) ->
     <<Val:64>>;
 encode({string, Val}) when is_list(Val) ->
     Size = length(Val),
-    % Might want to convert this to UTF-8 binary first, however for now
-    % I'll leave it to the next encoding when binary can be provided in
-    % UTF-8 format. In this part is kindly expected it to be ASCII
-    % string
+    %% Might want to convert this to UTF-8 binary first, however for now
+    %% I'll leave it to the next encoding when binary can be provided in
+    %% UTF-8 format. In this part is kindly expected it to be ASCII
+    %% string
     Bytes = list_to_binary(Val),
     <<Size:32, Bytes/bytes>>;
 encode({string, Val}) when is_binary(Val) ->
@@ -328,26 +332,26 @@ encode({list, {ElementType, Data}}) ->
     ElementTypeId = map_type(ElementType),
     Size = length(Data),
     EData = list_to_binary([
-        encode({ElementType, Element}) ||
-        Element <- Data
-    ]),
+                            encode({ElementType, Element}) ||
+                               Element <- Data
+                           ]),
     <<ElementTypeId, Size:32, EData/bytes>>;
 encode({set, Data}) ->
     encode({list, Data});
 encode({struct, Data}) ->
     EData = list_to_binary([
-        encode(StructElement) ||
-        StructElement <- Data
-    ]),
+                            encode(StructElement) ||
+                               StructElement <- Data
+                           ]),
     <<EData/bytes, 0>>;
 encode({map, {KeyType, ValType, Data}}) ->
     KeyTypeId = map_type(KeyType),
     ValTypeId = map_type(ValType),
     Size = length(Data),
     EData = list_to_binary([
-        [encode({KeyType, Key}), encode({ValType, Val})] ||
-        {Key, Val} <- Data
-    ]),
+                            [encode({KeyType, Key}), encode({ValType, Val})] ||
+                               {Key, Val} <- Data
+                           ]),
     <<KeyTypeId, ValTypeId, Size:32, EData/bytes>>.
 
 %% Decoding functions
@@ -375,22 +379,22 @@ decode(struct, Data) ->
     decode_struct(Data, []);
 decode(map, <<KeyTypeId, ValTypeId, Size:32, KVPsAndRest/bytes>>) ->
     decode_map(
-        map_type(KeyTypeId),
-        map_type(ValTypeId),
-        Size,
-        KVPsAndRest,
-        []
-    );
+      map_type(KeyTypeId),
+      map_type(ValTypeId),
+      Size,
+      KVPsAndRest,
+      []
+     );
 %% Lists and Sets are encoded the same way
 decode(set, Data) ->
     decode(list, Data);
 decode(list, <<ElementTypeId, Size:32, ElementsAndRest/bytes>>) ->
     decode_list(
-        map_type(ElementTypeId),
-        Size,
-        ElementsAndRest,
-        []
-    ).
+      map_type(ElementTypeId),
+      Size,
+      ElementsAndRest,
+      []
+     ).
 
 %% Helpers
 

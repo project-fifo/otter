@@ -30,6 +30,7 @@ start_link() ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 init([]) ->
-    [M:sup_init() || M <- [otters_snapshot_count, otters_conn_zipkin]],
+    otters_snapshot_count:sup_init(),
+    otters_conn_zipkin:sup_init(),
     ChildSpecs = [],
     {ok, { {one_for_all, 0, 1}, ChildSpecs} }.
