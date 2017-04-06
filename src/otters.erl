@@ -31,16 +31,18 @@
          ids/1
         ]).
 
--export_type([info/0, service/0, trace_id/0, span_id/0, span/0]).
+-export_type([info/0, service/0, trace_id/0, span_id/0,
+              span/0, maybe_span/0]).
 
--type time_us() :: non_neg_integer().            % timestamp in microseconds
--type info()    :: binary() | iolist() | atom() | integer().
--type ip4()     :: {0..255, 0..255, 0..255, 0..255}.
--type service() :: binary() | list() | default |
-                   {binary() | list(), ip4(), integer()}.
--type trace_id():: integer().
--type span_id() :: integer().
--type span()    :: #span{}.
+-type time_us()    :: non_neg_integer().            % timestamp in microseconds
+-type info()       :: binary() | iolist() | atom() | integer().
+-type ip4()        :: {0..255, 0..255, 0..255, 0..255}.
+-type service()    :: binary() | list() | default |
+                      {binary() | list(), ip4(), integer()}.
+-type trace_id()   :: integer().
+-type span_id()    :: integer().
+-type span()       :: #span{}.
+-type maybe_span() :: span() | undefined.
 
 
 
@@ -54,7 +56,7 @@ start(Name) ->
     start(Name, otters_lib:id()).
 
 
--spec start(info(), integer()) -> span().
+-spec start(info(), integer() | span()) -> span().
 start(Name, TraceId)
   when is_integer(TraceId) ->
     start(Name, TraceId, undefined);
@@ -77,7 +79,9 @@ start(Name, TraceId, ParentId)
        name = Name
       }.
 
--spec tag(span(), info(), info()) -> span().
+-spec tag(maybe_span(), info(), info()) -> maybe_span().
+tag(undefined, _Key, _Value) ->
+    undefined;
 tag(Span, Key, Value)
   when is_record(Span, span) ->
     Tags = Span#span.tags,
@@ -85,7 +89,10 @@ tag(Span, Key, Value)
       tags = lists:keystore(Key, 1, Tags, {Key, Value})
      }.
 
--spec tag(span(), info(), info(), service()) -> span().
+-spec tag(maybe_span(), info(), info(), service()) -> maybe_span().
+
+tag(undefined, _Key, _Value, _Service) ->
+    undefined;
 tag(Span, Key, Value, Service)
   when is_record(Span, span) ->
     Tags = Span#span.tags,
@@ -94,7 +101,9 @@ tag(Span, Key, Value, Service)
      }.
 
 
--spec log(span(), info()) -> span().
+-spec log(maybe_span(), info()) -> maybe_span().
+log(undefined, _Text) ->
+    undefined;
 log(Span, Text)
   when is_record(Span, span) ->
     Logs = Span#span.logs,
@@ -102,7 +111,9 @@ log(Span, Text)
       logs = [{otters_lib:timestamp(), Text} | Logs]
      }.
 
--spec log(span(), info(), service()) -> span().
+-spec log(maybe_span(), info(), service()) -> maybe_span().
+log(undefined, _Text, _Service) ->
+    undefined;
 log(Span, Text, Service)
   when is_record(Span, span) ->
     Logs = Span#span.logs,
@@ -110,7 +121,9 @@ log(Span, Text, Service)
       logs = [{otters_lib:timestamp(), Text, Service} | Logs]
      }.
 
--spec finish(span()) -> ok.
+-spec finish(maybe_span()) -> ok.
+finish(undefined) ->
+    undefined;
 finish(Span)
   when is_record(Span, span) ->
     Start = Span#span.timestamp,
@@ -121,7 +134,9 @@ finish(Span)
         logs = lists:reverse(Logs)
        }),
     ok.
--spec ids(span()) -> {trace_id(), span_id()}.
+-spec ids(maybe_span()) -> {trace_id(), span_id()} | undefined.
+ids(undefined) ->
+    undefined;
 ids(Span)
   when is_record(Span, span) ->
     #span{trace_id = TraceId, id = Id} = Span,

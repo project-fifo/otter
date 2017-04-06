@@ -83,11 +83,11 @@ finish() ->
 %% returns a {TraceId, SpanId} that is stored with the process API calls
 %% above for the calling process, so they can be used in the handling of
 %% the call
--spec ids() -> {otters:trace_id(), otters:span_id()}.
+-spec ids() -> {otters:trace_id(), otters:span_id()} | undefined.
 ids() ->
     Span = get(?KEY),
     otters:ids(Span).
 
--spec get_span() -> otters:span() | undefined.
+-spec get_span() -> otters:maybe_span().
 get_span() ->
     get(?KEY).
