@@ -18,7 +18,7 @@
 %%%
 %%%-------------------------------------------------------------------
 
--module(otter_sup).
+-module(otters_sup).
 -behaviour(supervisor).
 
 -export([start_link/0]).
@@ -30,6 +30,6 @@ start_link() ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 init([]) ->
-    [M:sup_init() || M <- [otter_snapshot_count, otter_conn_zipkin]],
+    [M:sup_init() || M <- [otters_snapshot_count, otters_conn_zipkin]],
     ChildSpecs = [],
     {ok, { {one_for_all, 0, 1}, ChildSpecs} }.

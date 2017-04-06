@@ -18,34 +18,24 @@
 %%%
 %%%-------------------------------------------------------------------
 
--module(otter_lib).
--compile(export_all).
+-module(otters_app).
 
+-behaviour(application).
 
-ip_to_i32({A,B,C,D}) ->
-    <<Ip:32>> = <<A,B,C,D>>,
-    Ip.
+%% Application callbacks
+-export([start/2, stop/1]).
 
-i32_to_ip(<<A,B,C,D>>) ->
-    {A,B,C,D}.
+%%====================================================================
+%% API
+%%====================================================================
 
-timestamp() ->
-    {MeS, S, MuS} = os:timestamp(),
-    (MeS*1000000+S)*1000000+MuS.
+start(_StartType, _StartArgs) ->
+    otters_sup:start_link().
 
-id() ->
-    <<Id:64>> = crypto:strong_rand_bytes(8),
-    Id.
+%%--------------------------------------------------------------------
+stop(_State) ->
+    ok.
 
-to_bin(Int) when is_integer(Int)->
-    integer_to_binary(Int);
-to_bin(Atom) when is_atom(Atom) ->
-    atom_to_binary(Atom, 'utf8');
-to_bin(List) when is_list(List) ->
-    unicode:characters_to_binary(List);
-to_bin(Binary) when is_binary(Binary) ->
-    Binary;
-to_bin(Fun) when is_function(Fun, 0) ->
-    to_bin(Fun());
-to_bin(Value) ->
-    unicode:characters_to_binary(io_lib:format("~1024p", [Value])).
+%%====================================================================
+%% Internal functions
+%%====================================================================

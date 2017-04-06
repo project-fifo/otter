@@ -1,7 +1,7 @@
-{application, otter,
+{application, otters,
  [{description, "OpenTracing Toolkit for ERlang"},
   {vsn, "0.1.0"},
-  {registered, [otter_sup, otter_snapshot_count, otter_conn_zipkin]},
+  {registered, [otters_sup, otters_snapshot_count, otters_conn_zipkin]},
   {mod, { otter_app, []}},
   {applications,
    [kernel,
@@ -37,7 +37,8 @@
     ]}
   ]},
   {modules, []},
-  {maintainers, ["Ferenc Holzhauser", "Chandrashekhar Mullaparthi"]},
+  {maintainers, ["Heinz N. Gies", "Ferenc Holzhauser",
+                 "Chandrashekhar Mullaparthi"]},
   {licenses, ["Apache"]},
-  {links, [{"Github", "https://github.com/bluehouse-technology/otter"}]}
+  {links, [{"Github", "https://github.com/project-fifo/otters"}]}
  ]}.

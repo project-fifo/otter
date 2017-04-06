@@ -24,9 +24,9 @@
 
 %% Sending is async
 
--module(otter_conn_zipkin).
+-module(otters_conn_zipkin).
 -compile(export_all).
--include("otter.hrl").
+-include("otters.hrl").
 
 sup_init() ->
     [
@@ -35,28 +35,28 @@ sup_init() ->
             [named_table, public | TableProps ]
         ) ||
         {Tab, TableProps} <- [
-            {otter_zipkin_buffer1, [{write_concurrency, true}, {keypos, 2}]},
-            {otter_zipkin_buffer2, [{write_concurrency, true}, {keypos, 2}]},
-            {otter_zipkin_status,  [{read_concurrency, true}]}
+            {otters_zipkin_buffer1, [{write_concurrency, true}, {keypos, 2}]},
+            {otters_zipkin_buffer2, [{write_concurrency, true}, {keypos, 2}]},
+            {otters_zipkin_status,  [{read_concurrency, true}]}
         ]
     ],
-    ets:insert(otter_zipkin_status, {current_buffer, otter_zipkin_buffer1}),
-    SendInterval = otter_config:read(zipkin_batch_interval_ms, 100),
+    ets:insert(otters_zipkin_status, {current_buffer, otters_zipkin_buffer1}),
+    SendInterval = otters_config:read(zipkin_batch_interval_ms, 100),
     timer:apply_interval(SendInterval, ?MODULE, send_buffer, []).
 
 store_span(Span) ->
-    [{_, Buffer}] = ets:lookup(otter_zipkin_status, current_buffer),
+    [{_, Buffer}] = ets:lookup(otters_zipkin_status, current_buffer),
     ets:insert(Buffer, Span).
 
 send_buffer() ->
-    [{_, Buffer}] = ets:lookup(otter_zipkin_status, current_buffer),
+    [{_, Buffer}] = ets:lookup(otters_zipkin_status, current_buffer),
     NewBuffer = case Buffer of
-        otter_zipkin_buffer1 ->
-            otter_zipkin_buffer2;
-        otter_zipkin_buffer2 ->
-            otter_zipkin_buffer1
+        otters_zipkin_buffer1 ->
+            otters_zipkin_buffer2;
+        otters_zipkin_buffer2 ->
+            otters_zipkin_buffer1
     end,
-    ets:insert(otter_zipkin_status, {current_buffer, NewBuffer}),
+    ets:insert(otters_zipkin_status, {current_buffer, NewBuffer}),
     case ets:tab2list(Buffer) of
         [] ->
             ok;
@@ -64,11 +64,11 @@ send_buffer() ->
             ets:delete_all_objects(Buffer),
             case send_batch_to_zipkin(Spans) of
                 {ok, 202} ->
-                    otter_snapshot_count:snapshot(
+                    otters_snapshot_count:snapshot(
                         [?MODULE, send_buffer, ok],
                         [{spans, length(Spans)}]);
                 Error ->
-                    otter_snapshot_count:snapshot(
+                    otters_snapshot_count:snapshot(
                         [?MODULE, send_buffer, failed],
                         [
                             {spans, length(Spans)},
@@ -78,7 +78,7 @@ send_buffer() ->
     end.
 
 send_batch_to_zipkin(Spans) ->
-    {ok, ZipkinURL} = otter_config:read(zipkin_collector_uri),
+    {ok, ZipkinURL} = otters_config:read(zipkin_collector_uri),
     send_batch_to_zipkin(ZipkinURL, Spans).
 
 send_batch_to_zipkin(ZipkinURL, Spans) ->
@@ -86,7 +86,7 @@ send_batch_to_zipkin(ZipkinURL, Spans) ->
     send_spans_http(ZipkinURL, Data).
 
 send_spans_http(ZipkinURL, Data) ->
-    send_spans_http(application:get_env(otter, http_client, ibrowse),
+    send_spans_http(application:get_env(otters, http_client, ibrowse),
 		    ZipkinURL, Data).
 
 send_spans_http(ibrowse, ZipkinURL, Data) ->
@@ -126,7 +126,7 @@ span_to_struct(#span{
     timestamp = Timestamp,
     duration = Duration
 }) ->
-    FinalTags = case otter_config:read(zipkin_add_host_tag_to_span, undefined) of
+    FinalTags = case otters_config:read(zipkin_add_host_tag_to_span, undefined) of
         {Key, Value} ->
             [{Key, Value, default} | Tags];
         _ ->
@@ -134,7 +134,7 @@ span_to_struct(#span{
     end,
     [
         {1, i64, TraceId},
-        {3, string, otter_lib:to_bin(Name)},
+        {3, string, otters_lib:to_bin(Name)},
         {4, i64, Id}
     ] ++
     case ParentId of
@@ -157,43 +157,43 @@ span_to_struct(#span{
     ].
 
 log_to_annotation({Timestamp, Text}) ->
-    case otter_config:read(zipkin_add_default_service_to_logs, false) of
+    case otters_config:read(zipkin_add_default_service_to_logs, false) of
         true ->
             log_to_annotation({Timestamp, Text, default});
         false ->
             [
                 {1, i64, Timestamp},
-                {2, string, otter_lib:to_bin(Text)}
+                {2, string, otters_lib:to_bin(Text)}
             ]
     end;
 log_to_annotation({Timestamp, Text, Service}) ->
     [
         {1, i64, Timestamp},
-        {2, string, otter_lib:to_bin(Text)},
+        {2, string, otters_lib:to_bin(Text)},
         {3,struct, host_to_struct(Service)}
     ].
 
 tag_to_binary_annotation({Key, Value}) ->
-    case otter_config:read(zipkin_add_default_service_to_tags, false) of
+    case otters_config:read(zipkin_add_default_service_to_tags, false) of
         true ->
             tag_to_binary_annotation({Key, Value, default});
         false ->
             [
-                {1, string, otter_lib:to_bin(Key)},
-                {2, string, otter_lib:to_bin(Value)},
+                {1, string, otters_lib:to_bin(Key)},
+                {2, string, otters_lib:to_bin(Value)},
                 {3,i32,6}
             ]
     end;
 tag_to_binary_annotation({Key, Value, Service}) ->
     [
-        {1, string, otter_lib:to_bin(Key)},
-        {2, string, otter_lib:to_bin(Value)},
+        {1, string, otters_lib:to_bin(Key)},
+        {2, string, otters_lib:to_bin(Value)},
         {3,i32,6},
         {4,struct, host_to_struct(Service)}
     ].
 
 host_to_struct(default) ->
-    DefaultService = otter_config:read(
+    DefaultService = otters_config:read(
         zipkin_tag_host_service,
         atom_to_list(node())
     ),
@@ -201,12 +201,12 @@ host_to_struct(default) ->
 host_to_struct(Service) when is_binary(Service) orelse is_list(Service) ->
     host_to_struct({
         Service,
-        otter_config:read(zipkin_tag_host_ip, {127,0,0,1}),
-        otter_config:read(zipkin_tag_host_port, 0)
+        otters_config:read(zipkin_tag_host_ip, {127,0,0,1}),
+        otters_config:read(zipkin_tag_host_port, 0)
     });
 host_to_struct({Service, Ip, Port}) ->
     [
-        {1,i32, otter_lib:ip_to_i32(Ip)},
+        {1,i32, otters_lib:ip_to_i32(Ip)},
         {2,i16, Port},
         {3,string, Service}
     ].
@@ -403,7 +403,7 @@ decode_struct(Data, Acc) ->
     end.
 
 decode_map(KeyType, ValType, 0, Rest, Acc) ->
-    {{{KeyType, ValType}, list:reverse(Acc)}, Rest};
+    {{{KeyType, ValType}, lists:reverse(Acc)}, Rest};
 decode_map(KeyType, ValType, Size, KVPsAndRest, Acc) ->
     {Key, ValAndRest} = decode(KeyType, KVPsAndRest),
     {Val, Rest} =  decode(ValType, ValAndRest),

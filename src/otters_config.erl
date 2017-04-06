@@ -18,21 +18,21 @@
 %%%
 %%%-------------------------------------------------------------------
 
--module(otter_config).
+-module(otters_config).
 -compile(export_all).
 
 list() ->
-    application:get_all_env(otter).
+    application:get_all_env(otters).
 
 read(Key) ->
-    application:get_env(otter, Key).
+    application:get_env(otters, Key).
 
 read(Key, Default) ->
-    application:get_env(otter, Key, Default).
+    application:get_env(otters, Key, Default).
 
 %% This is provided to allow temporary configuration. Obviously in this
 %% default implementation it is not persistent as application environment
 %% from either the .app file in the ebin directory or from the release
 %% specific sys.config (or alike) will be read at startup.
 write(Key, Value) ->
-    application:set_env(otter, Key, Value).
+    application:set_env(otters, Key, Value).

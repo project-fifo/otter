@@ -18,7 +18,7 @@
 %%%
 %%%-------------------------------------------------------------------
 
--module(otter_snapshot_count).
+-module(otters_snapshot_count).
 -compile(export_all).
 
 %% This module implements a simple way of giving operational visibility
@@ -32,7 +32,7 @@ snapshot(Key, [{_, _} |_ ] = Data) ->
     {_, _, Us} = os:timestamp(),
     {{Year, Month, Day}, {Hour, Min, Sec}} = calendar:local_time(),
     ets:insert(
-        otter_snapshot_store,
+        otters_snapshot_store,
         {
             Key,
             [
@@ -41,9 +41,9 @@ snapshot(Key, [{_, _} |_ ] = Data) ->
             ]
         }
     ),
-    case catch ets:update_counter(otter_snapshot_count, Key, 1) of
+    case catch ets:update_counter(otters_snapshot_count, Key, 1) of
         {'EXIT', {badarg, _}} ->
-            ets:insert(otter_snapshot_count, {Key, 1});
+            ets:insert(otters_snapshot_count, {Key, 1});
         Cnt ->
             Cnt
     end;
@@ -51,18 +51,18 @@ snapshot(Key, Data) ->
     snapshot(Key, [{data, Data}]).
 
 list_counts() ->
-    ets:tab2list(otter_snapshot_count).
+    ets:tab2list(otters_snapshot_count).
 
 get_snap(Key) ->
-    ets:lookup(otter_snapshot_store, Key).
+    ets:lookup(otters_snapshot_store, Key).
 
 delete_counter(Key) ->
-    ets:delete(otter_snapshot_store, Key),
-    ets:delete(otter_snapshot_count, Key).
+    ets:delete(otters_snapshot_store, Key),
+    ets:delete(otters_snapshot_count, Key).
 
 delete_all_counters() ->
-    ets:delete_all_objects(otter_snapshot_store),
-    ets:delete_all_objects(otter_snapshot_count).
+    ets:delete_all_objects(otters_snapshot_store),
+    ets:delete_all_objects(otters_snapshot_count).
 
 sup_init() -> [
     ets:new(
@@ -70,11 +70,7 @@ sup_init() -> [
         [named_table, public, {Concurrency, true}]
     ) ||
     {Tab, Concurrency} <- [
-        {otter_snapshot_count, write_concurrency},
-        {otter_snapshot_store, write_concurrency}
+        {otters_snapshot_count, write_concurrency},
+        {otters_snapshot_store, write_concurrency}
     ]
 ].
-
-
-
-

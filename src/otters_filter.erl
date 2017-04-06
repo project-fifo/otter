@@ -18,9 +18,9 @@
 %%%
 %%%-------------------------------------------------------------------
 
--module(otter_filter).
+-module(otters_filter).
 -compile(export_all).
--include("otter.hrl").
+-include("otters.hrl").
 
 %% The main idea behind this filter that the processing of the spans can
 %% be modified runtime by changing the filter configuration. This way
@@ -48,7 +48,7 @@
 %% list of {Conditions, Actions}.
 
 %% Evaluation of the rules happens in the process which invokes the span
-%% end statement (e.g. otter_span:pend/0) i.e. it has impact on the
+%% end statement (e.g. otters_span:pend/0) i.e. it has impact on the
 %% request processing time. Therefore the actions that consume little
 %% time and resources with no external interfaces (e.g. counting in ets)
 %% can be done during the evaluation of the rules, but anything that has
@@ -56,10 +56,10 @@
 %% collecting) should be done asynchronously.
 
 span(#span{tags = Tags, name = Name, duration = Duration} = Span) ->
-    Rules = otter_config:read(filter_rules, []),
+    Rules = otters_config:read(filter_rules, []),
     rules(Rules, [
-        {otter_span_name, Name},
-        {otter_span_duration, Duration}|
+        {otters_span_name, Name},
+        {otters_span_duration, Duration}|
         Tags
     ], Span).
 
@@ -150,7 +150,7 @@ do_actions([], Tags, Span, continue) ->
     {continue, Tags, Span}.
 
 action(send_to_zipkin, Tags, Span) ->
-    otter_conn_zipkin:store_span(Span),
+    otters_conn_zipkin:store_span(Span),
     Tags;
 action({snapshot_count, Prefix, TagNames}, Tags, Span) ->
     TagValues = [
@@ -160,7 +160,7 @@ action({snapshot_count, Prefix, TagNames}, Tags, Span) ->
         end ||
         Key <- TagNames
     ],
-    otter_snapshot_count:snapshot(Prefix ++ TagValues, Span),
+    otters_snapshot_count:snapshot(Prefix ++ TagValues, Span),
     Tags;
 action(_, Tags, _) ->
     Tags.

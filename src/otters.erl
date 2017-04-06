@@ -17,13 +17,13 @@
 %%% under the License.
 %%%
 %%% @doc
-%%% otter API module
+%%% otters API module
 %%% @end
 %%%-------------------------------------------------------------------
 
--module(otter).
+-module(otters).
 -compile(export_all).
--include("otter.hrl").
+-include("otters.hrl").
 
 %% ====================  SPAN function API  ======================
 %% This API functions with passing around the Span in the function calls
@@ -31,52 +31,52 @@
 
 -spec span_start(info()) -> span().
 span_start(Name) ->
-    otter_span:fstart(Name).
+    otters_span:fstart(Name).
 
 -spec span_start(info(), integer()) -> span().
 span_start(Name, TraceId)
   when is_integer(TraceId) ->
-    otter_span:fstart(Name, TraceId);
+    otters_span:fstart(Name, TraceId);
 span_start(Name, ParentSpan)
   when is_record(ParentSpan, span) ->
-    {TraceId, ParentId} = otter_span:fget_ids(ParentSpan),
-    otter_span:fstart(Name, TraceId, ParentId).
+    {TraceId, ParentId} = otters_span:fget_ids(ParentSpan),
+    otters_span:fstart(Name, TraceId, ParentId).
 
 -spec span_start(info(), integer(), integer()) -> span().
 span_start(Name, TraceId, ParentId)
   when is_integer(TraceId), is_integer(ParentId) ->
-    otter_span:fstart(Name, TraceId, ParentId).
+    otters_span:fstart(Name, TraceId, ParentId).
 
 -spec span_tag(span(), info(), info()) -> span().
 span_tag(Span, Key, Value)
   when is_record(Span, span) ->
-    otter_span:ftag(Span, Key, Value).
+    otters_span:ftag(Span, Key, Value).
 
 -spec span_tag(span(), info(), info(), service()) -> span().
 span_tag(Span, Key, Value, Service)
   when is_record(Span, span) ->
-    otter_span:ftag(Span, Key, Value, Service).
+    otters_span:ftag(Span, Key, Value, Service).
 
 
 -spec span_log(span(), info()) -> span().
 span_log(Span, Text)
   when is_record(Span, span) ->
-    otter_span:flog(Span, Text).
+    otters_span:flog(Span, Text).
 
 -spec span_log(span(), info(), service()) -> span().
 span_log(Span, Text, Service)
   when is_record(Span, span) ->
-    otter_span:flog(Span, Text, Service).
+    otters_span:flog(Span, Text, Service).
 
 -spec span_end(span()) -> ok.
 span_end(Span)
   when is_record(Span, span) ->
-    otter_span:fend(Span).
+    otters_span:fend(Span).
 
 -spec span_ids(span()) -> {trace_id(), span_id()}.
 span_ids(Span)
   when is_record(Span, span) ->
-    otter_span:fget_ids(Span).
+    otters_span:fget_ids(Span).
 
 
 %% ====================  SPAN process API  ======================
@@ -86,43 +86,43 @@ span_ids(Span)
 
 -spec span_pstart(info()) -> ok.
 span_pstart(Name) ->
-    otter_span:pstart(Name).
+    otters_span:pstart(Name).
 
 -spec span_pstart(info(), trace_id()) -> ok.
 span_pstart(Name, TraceId) ->
-    otter_span:pstart(Name, TraceId).
+    otters_span:pstart(Name, TraceId).
 
 -spec span_pstart(info(), trace_id(), span_id()) -> ok.
 span_pstart(Name, TraceId, ParentId) ->
-    otter_span:pstart(Name, TraceId, ParentId).
+    otters_span:pstart(Name, TraceId, ParentId).
 
 -spec span_ptag(info(), info()) -> ok.
 span_ptag(Key, Value) ->
-    otter_span:ptag(Key, Value).
+    otters_span:ptag(Key, Value).
 
 -spec span_ptag(info(), info(), service()) -> ok.
 span_ptag(Key, Value, Service) ->
-    otter_span:ptag(Key, Value, Service).
+    otters_span:ptag(Key, Value, Service).
 
 -spec span_plog(info()) -> ok.
 span_plog(Text) ->
-    otter_span:plog(Text).
+    otters_span:plog(Text).
 
 -spec span_plog(info(), service()) -> ok.
 span_plog(Text, Service) ->
-    otter_span:plog(Text, Service).
+    otters_span:plog(Text, Service).
 
 -spec span_pend() -> ok.
 span_pend() ->
-    otter_span:pend().
+    otters_span:pend().
 
 -spec span_pids() -> {trace_id(), span_id()}.
 span_pids() ->
-    otter_span:pget_ids().
+    otters_span:pget_ids().
 
 -spec span_pget() -> span().
 span_pget() ->
-    otter_span:pget_span().
+    otters_span:pget_span().
 
 
 
@@ -139,47 +139,47 @@ span_pget() ->
 
 -spec counter_list() -> [{list(), integer()}].
 counter_list() ->
-    otter_snapshot_count:list_counts().
+    otters_snapshot_count:list_counts().
 
 -spec counter_snapshot(list()) -> term().
 counter_snapshot(Key) ->
-    otter_snapshot_count:get_snap(Key).
+    otters_snapshot_count:get_snap(Key).
 
 -spec counter_delete(list()) -> ok.
 counter_delete(Key) ->
-    otter_snapshot_count:delete_counter(Key).
+    otters_snapshot_count:delete_counter(Key).
 
 -spec counter_delete_all() -> ok.
 counter_delete_all() ->
-    otter_snapshot_count:delete_all_counters().
+    otters_snapshot_count:delete_all_counters().
 
 
 %% ========================== Config API ============================
 %% The default implementation uses the application environment to
 %% store configuration. There is a simple wrapper module to interface
-%% with configuration store (otter_config). To implementat other config
+%% with configuration store (otters_config). To implementat other config
 %% persistence, the module should be replaced with another one providing
 %% the same simple read/write API functions.
 %% WARNING : In the default implementation using the application
 %% environment, so the write function is NOT persistent. In case of node
 %% restart and/or application reload the configuration will be reset to
 %% whatever environment is defined in the release (sys) config or app
-%% file. There is an example configuration provided in the otter.app
+%% file. There is an example configuration provided in the otters.app
 %% file as a reference.
 
 -spec config_list() -> term().
 config_list() ->
-    otter_config:list().
+    otters_config:list().
 
 -spec config_read(atom()) -> term().
 config_read(Key) ->
-    otter_config:read(Key).
+    otters_config:read(Key).
 
 -spec config_read(atom(), term()) -> term().
 config_read(Key, Default) ->
-    otter_config:read(Key, Default).
+    otters_config:read(Key, Default).
 
 -spec config_write(atom(), term()) -> ok.
 config_write(Key, Value) ->
-    otter_config:write(Key, Value).
+    otters_config:write(Key, Value).
 
