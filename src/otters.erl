@@ -22,109 +22,110 @@
 %%%-------------------------------------------------------------------
 
 -module(otters).
--compile(export_all).
 -include("otters.hrl").
+
+-export([start/1, start/2, start/3,
+         tag/3, tag/4,
+         log/2, log/3,
+         finish/1,
+         ids/1
+        ]).
+
+-export_type([info/0, service/0, trace_id/0, span_id/0, span/0]).
+
+-type time_us() :: non_neg_integer().            % timestamp in microseconds
+-type info()    :: binary() | iolist() | atom() | integer().
+-type ip4()     :: {0..255, 0..255, 0..255, 0..255}.
+-type service() :: binary() | list() | default |
+                   {binary() | list(), ip4(), integer()}.
+-type trace_id():: integer().
+-type span_id() :: integer().
+-type span()    :: #span{}.
+
+
+
 
 %% ====================  SPAN function API  ======================
 %% This API functions with passing around the Span in the function calls
 %% All of them return a Span structure (erlang map).
 
--spec span_start(info()) -> span().
-span_start(Name) ->
-    otters_span:fstart(Name).
+-spec start(info()) -> span().
+start(Name) ->
+    start(Name, otters_lib:id()).
 
--spec span_start(info(), integer()) -> span().
-span_start(Name, TraceId)
+
+-spec start(info(), integer()) -> span().
+start(Name, TraceId)
   when is_integer(TraceId) ->
-    otters_span:fstart(Name, TraceId);
-span_start(Name, ParentSpan)
+    start(Name, TraceId, undefined);
+start(Name, ParentSpan)
   when is_record(ParentSpan, span) ->
     {TraceId, ParentId} = otters_span:fget_ids(ParentSpan),
-    otters_span:fstart(Name, TraceId, ParentId).
+    start(Name, TraceId, ParentId).
 
--spec span_start(info(), integer(), integer()) -> span().
-span_start(Name, TraceId, ParentId)
-  when is_integer(TraceId), is_integer(ParentId) ->
-    otters_span:fstart(Name, TraceId, ParentId).
+-spec start(info(), integer(), integer()| undefined) ->
+                   span().
 
--spec span_tag(span(), info(), info()) -> span().
-span_tag(Span, Key, Value)
+start(Name, TraceId, ParentId)
+  when is_integer(TraceId), (is_integer(ParentId) orelse
+                             ParentId =:= undefined) ->
+    #span{
+       timestamp = otters_lib:timestamp(),
+       trace_id = TraceId,
+       id = otters_lib:id(),
+       parent_id = ParentId,
+       name = Name
+      }.
+
+-spec tag(span(), info(), info()) -> span().
+tag(Span, Key, Value)
   when is_record(Span, span) ->
-    otters_span:ftag(Span, Key, Value).
+    Tags = Span#span.tags,
+    Span#span{
+      tags = lists:keystore(Key, 1, Tags, {Key, Value})
+     }.
 
--spec span_tag(span(), info(), info(), service()) -> span().
-span_tag(Span, Key, Value, Service)
+-spec tag(span(), info(), info(), service()) -> span().
+tag(Span, Key, Value, Service)
   when is_record(Span, span) ->
-    otters_span:ftag(Span, Key, Value, Service).
+    Tags = Span#span.tags,
+    Span#span{
+      tags = lists:keystore(Key, 1, Tags, {Key, Value, Service})
+     }.
 
 
--spec span_log(span(), info()) -> span().
-span_log(Span, Text)
+-spec log(span(), info()) -> span().
+log(Span, Text)
   when is_record(Span, span) ->
-    otters_span:flog(Span, Text).
+    Logs = Span#span.logs,
+    Span#span{
+      logs = [{otters_lib:timestamp(), Text} | Logs]
+     }.
 
--spec span_log(span(), info(), service()) -> span().
-span_log(Span, Text, Service)
+-spec log(span(), info(), service()) -> span().
+log(Span, Text, Service)
   when is_record(Span, span) ->
-    otters_span:flog(Span, Text, Service).
+    Logs = Span#span.logs,
+    Span#span{
+      logs = [{otters_lib:timestamp(), Text, Service} | Logs]
+     }.
 
--spec span_end(span()) -> ok.
-span_end(Span)
+-spec finish(span()) -> ok.
+finish(Span)
   when is_record(Span, span) ->
-    otters_span:fend(Span).
-
--spec span_ids(span()) -> {trace_id(), span_id()}.
-span_ids(Span)
+    Start = Span#span.timestamp,
+    Logs = Span#span.logs,
+    otters_filter:span(
+      Span#span{
+        duration = otters_lib:timestamp() - Start,
+        logs = lists:reverse(Logs)
+       }),
+    ok.
+-spec ids(span()) -> {trace_id(), span_id()}.
+ids(Span)
   when is_record(Span, span) ->
-    otters_span:fget_ids(Span).
-
-
-%% ====================  SPAN process API  ======================
-%% This API uses the process dictionary to collect span information
-%% and can be used when all span tags an events happen in the same
-%% request handling process.
-
--spec span_pstart(info()) -> ok.
-span_pstart(Name) ->
-    otters_span:pstart(Name).
-
--spec span_pstart(info(), trace_id()) -> ok.
-span_pstart(Name, TraceId) ->
-    otters_span:pstart(Name, TraceId).
-
--spec span_pstart(info(), trace_id(), span_id()) -> ok.
-span_pstart(Name, TraceId, ParentId) ->
-    otters_span:pstart(Name, TraceId, ParentId).
-
--spec span_ptag(info(), info()) -> ok.
-span_ptag(Key, Value) ->
-    otters_span:ptag(Key, Value).
-
--spec span_ptag(info(), info(), service()) -> ok.
-span_ptag(Key, Value, Service) ->
-    otters_span:ptag(Key, Value, Service).
-
--spec span_plog(info()) -> ok.
-span_plog(Text) ->
-    otters_span:plog(Text).
-
--spec span_plog(info(), service()) -> ok.
-span_plog(Text, Service) ->
-    otters_span:plog(Text, Service).
-
--spec span_pend() -> ok.
-span_pend() ->
-    otters_span:pend().
-
--spec span_pids() -> {trace_id(), span_id()}.
-span_pids() ->
-    otters_span:pget_ids().
-
--spec span_pget() -> span().
-span_pget() ->
-    otters_span:pget_span().
-
-
+    #span{trace_id = TraceId, id = Id} = Span,
+    {TraceId, Id}.
 
 %% ========================  Snap/Count API  =========================
 %% When span_end/1 or span_pend/0 is called then the completed span is
