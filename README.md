@@ -105,10 +105,12 @@ The following type specifications are in otter.hrl
 }).
 
 -type span()    :: #span{}.
+-type maybe_span()    :: span() | undefined.
+
 
 ```
 
-#### Functional API
+#### Functional API (`otters:`)
 
 Passing the span structure between requests, this API will probably
 require to pass the span in function calls if the function has
@@ -118,53 +120,53 @@ proplists) then inserting the span information is more or less trivial.
 
 Start span with name only. Name should refer e.g. to the interface.
 ```erlang
--spec span_start(Name::info()) -> span().
+-spec start(Name::info()) -> span().
 ```
 
 Start span with name and trace_id where trace_id e.g. received from
 protocol.
 
 ```erlang
--spec span_start(Name::info(), TraceId::integer()) -> span().
+-spec start(Name::info(), TraceId::integer() | span()) -> span().
 ```
 
 Start span with name, trace_id and parent span id e.g. received from
 protocol.
 
 ```erlang
--spec span_start(Name::info(), TraceId::integer(), ParentId::integer()) -> span().
+-spec start(Name::info(), TraceId::integer(), ParentId::integer()) -> span().
 ```
 
 Start span with name and parent span. trace_id and parent span id are
 extracted from the parent.
 
 ```erlang
--spec span_start(info(), ParentSpan :: span()) -> span().
+-spec start(info(), ParentSpan :: span()) -> span().
 ```
 
 Add a tag to the previously started span.
 ```erlang
--spec span_tag(Span::span(), Key::info(), Value::info()) -> span().
+-spec tag(Span::maybe_span(), Key::info(), Value::info()) -> maybe_span().
 ```
 
 Add a tag to the previously started span with additional service information.
 ```erlang
--spec span_tag(Span::span(), Key::info(), Value::info(), Service::service()) -> span().
+-spec tag(Span::maybe_span(), Key::info(), Value::info(), Service::service()) -> maybe_span().
 ```
 
 Add a log/event to the previously started span
 ```erlang
--spec span_log(Span::span(), Text::info()) -> span().
+-spec log(Span::maybe_span(), Text::info()) -> maybe_span().
 ```
 
 Add a log/event to the previously started span with additional service information0
 ```erlang
--spec span_log(Span::span(), Text::info(), Service::service()) -> span().
+-spec log(Span::maybe_span(), Text::info(), Service::service()) -> maybe_span().
 ```
 
 End span and invoke the span filter (see below)
 ```erlang
--spec span_end(Span::span()) -> ok.
+-spec finish(Span::maybe_span()) -> ok.
 ```
 
 Get span id's. Return the **trace_id** and the **span** id from the
@@ -172,32 +174,32 @@ currently started span. This can be used e.g. when process "boundary" is
 to be passed and eventually new span needs this information. Also when
 these id's should be passed to a protocol interface for another system
 ```erlang
--spec span_ids(span()) -> {trace_id(), span_id()}.
+-spec ids(maybe_span()) -> {trace_id(), span_id()} | undefined.
 ```
 example :
 
 ```erlang
     ...
-    Span = otter:span_start("radius request"),
+    Span = otters:start("radius request"),
     ...
     ...
-    Span1 = otter:span_tag(Span, "request_id", RequestId),
+    Span1 = otters:tag(Span, "request_id", RequestId),
     ...
     ...
-    Span2 = otter:span_log(Span1, "invoke user db"),
+    Span2 = otters:log(Span1, "invoke user db"),
     ...
     ...
-    Span3 = otter:span_log(Span2, "user db result"),
-    Span4 = otter:span_tag(Span3, "user db result", "ok"),
+    Span3 = otters:log(Span2, "user db result"),
+    Span4 = otters:tag(Span3, "user db result", "ok"),
     ...
     ...
-    Span5 = otter:span_tag(Span4, "final result", "error"),
-    Span6 = otter:span_tag(Span5, "final result reason", "unknown user"),
-    otter:span_end(Span6),
+    Span5 = otters:tag(Span4, "final result", "error"),
+    Span6 = otters:tag(Span5, "final result reason", "unknown user"),
+    otters:end(Span6),
     ...
 ```
 
-#### Process API
+#### Process API (`ottersp:`)
 
 The simplest API uses the process dictionary to store span information.
 This is probably the least work to implement in existing code.
@@ -205,49 +207,49 @@ This is probably the least work to implement in existing code.
 Start span with name only. Name should refer e.g. to the interface.
 
 ```erlang
--spec span_pstart(Name::info()) -> ok.
+-spec start(Name::info()) -> ok.
 ```
 
 Start span with name and trace_id where trace_id e.g. received from
 protocol.
 
 ```erlang
--spec span_pstart(Name::info(), TraceId::trace_id()) -> ok.
+-spec start(Name::info(), TraceId::trace_id() | span()) -> ok.
 ```
 
 Start span with name, trace_id and parent span id e.g. received from
 protocol.
 
 ```erlang
--spec span_pstart(Name::info(), TraceId::trace_id(), ParnetId::span_id()) -> ok.
+-spec start(Name::info(), TraceId::trace_id(), ParnetId::span_id()) -> ok.
 ```
 
 Add a tag to the previously started span.
 
 ```erlang
--spec span_ptag(Key::info(), Value::info()) -> ok.
+-spec tag(Key::info(), Value::info()) -> ok.
 ```
 
 Add a tag to the previously started span with additional service information
 
 ```erlang
--spec span_ptag(Key::info(), Value::info(), Service::service()) -> ok.
+-spec tag(Key::info(), Value::info(), Service::service()) -> ok.
 ```
 
 Add a log/event to the previously started span
 ```erlang
--spec span_plog(Text::info()) -> ok.
+-spec log(Text::info()) -> ok.
 ```
 
 Add a log/event to the previously started span with additional service information
 ```erlang
--spec span_plog(Text::info(), Service::service()) -> ok.
+-spec log(Text::info(), Service::service()) -> ok.
 ```
 
 
 End span and invoke the span filter (see below)
 ```erlang
--spec span_pend() -> ok.
+-spec finish() -> ok.
 ```
 
 Get span id's. Return the **trace_id** and the **span** id from the
@@ -256,36 +258,36 @@ to be passed and eventually new span needs this information. Also when
 these id's should be passed to a protocol interface for another system
 
 ```erlang
--spec span_pids() -> {trace_id(), span_id()}.
+-spec ids() -> {trace_id(), span_id()} | undefined.
 ```
 
 Return the current span. e.g. it can be handed to another process to
 continue collecting span information using the functional API.
 
 ```
--spec span_pget() -> span().
+-spec span_get() -> maybe_span().
 ```
 
 example :
 
 ```erlang
     ...
-    otter:span_pstart("radius request"),
+    ottersp:start("radius request"),
     ...
     ...
-    otter:span_ptag("request_id", RequestId),
+    ottersp:tag("request_id", RequestId),
     ...
     ...
-    otter:span_plog("invoke user db"),
+    ottersp:log("invoke user db"),
     ...
     ...
-    otter:span_plog("user db result"),
-    otter:span_ptag("user_db_result", "ok"),
+    ottersp:log("user db result"),
+    ottersp:tag("user_db_result", "ok"),
     ...
     ...
-    otter:span_ptag("final_result", "error"),
-    otter:span_ptag("final_result_reason", "unknown user"),
-    otter:span_pend(),
+    ottersp:tag("final_result", "error"),
+    ottersp:tag("final_result_reason", "unknown user"),
+    ottersp:end(),
     ...
 ```
 
