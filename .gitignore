@@ -1,5 +1,4 @@
 .eunit
-deps
 *.o
 *.beam
 *.plt
@@ -11,3 +10,4 @@ rel/example_project
 _build/
 *~
 rebar3
+doc

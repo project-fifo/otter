@@ -17,7 +17,11 @@
 %%% under the License.
 %%%
 %%% @doc
-%%% otters API module
+%%% otters API module. Functions have no effect when
+%%% <em>undefined</em> is passed as a spawn.
+%%%
+%%% This API functions with passing around the Span in the function calls
+%%% All of them return a Span structure.
 %%% @end
 %%%-------------------------------------------------------------------
 
@@ -25,6 +29,7 @@
 -include("otters.hrl").
 
 -export([start/1, start/2, start/3,
+         start_child/2,
          tag/3, tag/4,
          log/2, log/3,
          finish/1,
@@ -34,7 +39,6 @@
 -export_type([info/0, service/0, trace_id/0, span_id/0,
               span/0, maybe_span/0]).
 
--type time_us()    :: non_neg_integer().            % timestamp in microseconds
 -type info()       :: binary() | iolist() | atom() | integer().
 -type ip4()        :: {0..255, 0..255, 0..255, 0..255}.
 -type service()    :: binary() | list() | default |
@@ -43,31 +47,42 @@
 -type span_id()    :: integer().
 -type span()       :: #span{}.
 -type maybe_span() :: span() | undefined.
+%% timestamp in microseconds
+-type time_us()    :: non_neg_integer().
+
 
 
 
 
 %% ====================  SPAN function API  ======================
-%% This API functions with passing around the Span in the function calls
-%% All of them return a Span structure (erlang map).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Starts a new span with a given name and a generated trace id.
+%% @end
+%%--------------------------------------------------------------------
 -spec start(info()) -> span().
 start(Name) ->
     start(Name, otters_lib:id()).
 
-
--spec start(info(), integer() | span()) -> span().
+%%--------------------------------------------------------------------
+%% @doc
+%% Starts a new span with a given Trace ID.
+%% @end
+%%--------------------------------------------------------------------
+-spec start(info(), integer()) -> span().
 start(Name, TraceId)
   when is_integer(TraceId) ->
-    start(Name, TraceId, undefined);
-start(Name, ParentSpan)
-  when is_record(ParentSpan, span) ->
-    {TraceId, ParentId} = ids(ParentSpan),
-    start(Name, TraceId, ParentId).
+    start(Name, TraceId, undefined).
 
--spec start(info(), integer(), integer()| undefined) ->
+-spec start(info(), integer(), integer() | undefined) ->
                    span().
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Starts a new span with a given Trace ID and Parent ID.
+%% @end
+%%--------------------------------------------------------------------
 start(Name, TraceId, ParentId)
   when is_integer(TraceId), (is_integer(ParentId) orelse
                              ParentId =:= undefined) ->
@@ -79,6 +94,26 @@ start(Name, TraceId, ParentId)
        name = Name
       }.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Starts a new span as a child of a existing span, using the parents
+%% Trace ID and setting the childs parent to the parents Span ID
+%% @end
+%%--------------------------------------------------------------------
+-spec start_child(info(), maybe_span()) -> maybe_span().
+start_child(_Name, undefined) ->
+    undefined;
+start_child(Name, ParentSpan)
+  when is_record(ParentSpan, span) ->
+    {TraceId, ParentId} = ids(ParentSpan),
+    start(Name, TraceId, ParentId).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a tag to a span, possibly overwriting the existing value.
+%% @end
+%%--------------------------------------------------------------------
 -spec tag(maybe_span(), info(), info()) -> maybe_span().
 tag(undefined, _Key, _Value) ->
     undefined;
@@ -91,6 +126,12 @@ tag(Span, Key, Value)
 
 -spec tag(maybe_span(), info(), info(), service()) -> maybe_span().
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a tag to a span with a given service, possibly overwriting
+%% the existing value.
+%% @end
+%%--------------------------------------------------------------------
 tag(undefined, _Key, _Value, _Service) ->
     undefined;
 tag(Span, Key, Value, Service)
@@ -100,7 +141,11 @@ tag(Span, Key, Value, Service)
       tags = lists:keystore(Key, 1, Tags, {Key, Value, Service})
      }.
 
-
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a tag to a span, possibly overwriting the existing value.
+%% @end
+%%--------------------------------------------------------------------
 -spec log(maybe_span(), info()) -> maybe_span().
 log(undefined, _Text) ->
     undefined;
@@ -111,6 +156,12 @@ log(Span, Text)
       logs = [{otters_lib:timestamp(), Text} | Logs]
      }.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a log to a span with a given service, possibly overwriting
+%% the existing value.
+%% @end
+%%--------------------------------------------------------------------
 -spec log(maybe_span(), info(), service()) -> maybe_span().
 log(undefined, _Text, _Service) ->
     undefined;
@@ -121,6 +172,12 @@ log(Span, Text, Service)
       logs = [{otters_lib:timestamp(), Text, Service} | Logs]
      }.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Ends a span and prepares queues it to be dispatched to the trace
+%% server.
+%% @end
+%%--------------------------------------------------------------------
 -spec finish(maybe_span()) -> ok.
 finish(undefined) ->
     undefined;
@@ -134,6 +191,12 @@ finish(Span)
         logs = lists:reverse(Logs)
        }),
     ok.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrives the Trace ID and the Span ID from a span.
+%% @end
+%%--------------------------------------------------------------------
 -spec ids(maybe_span()) -> {trace_id(), span_id()} | undefined.
 ids(undefined) ->
     undefined;
