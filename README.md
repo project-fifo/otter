@@ -1,8 +1,8 @@
 # OTTERS
 
-Cleanup of otter with a community focus. Because multiple otter build a damn a lot faster!
+Cleanup of otter with a community focus. Because multiple otters build a damn a lot faster!
 
-OpenTracing Toolkit for ERlang
+OpenTracing Toolkit for Erlang
 
 ![otter logo](docs/images/otter_logo.png)
 
