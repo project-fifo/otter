@@ -1,5 +1,5 @@
 {application, otters,
- [{description, "OpenTracing Toolkit for ERlang"},
+ [{description, "OpenTracing Toolkit for Erlang"},
   {vsn, "0.1.0"},
   {registered, [otters_sup, otters_snapshot_count, otters_conn_zipkin]},
   {mod, { otters_app, []}},
