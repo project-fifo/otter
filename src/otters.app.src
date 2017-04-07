@@ -37,8 +37,7 @@
     ]}
   ]},
   {modules, []},
-  {maintainers, ["Heinz N. Gies", "Ferenc Holzhauser",
-                 "Chandrashekhar Mullaparthi"]},
+  {maintainers, ["Heinz N. Gies"]},
   {licenses, ["Apache"]},
   {links, [{"Github", "https://github.com/project-fifo/otters"}]}
  ]}.
