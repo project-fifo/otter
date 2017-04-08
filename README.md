@@ -1,6 +1,4 @@
-[![Build Status][travis_ci_image]][travis_ci]
-
-[![Hex pm](http://img.shields.io/hexpm/v/otters.svg?style=flat)](https://hex.pm/packages/otters)
+[![Build Status](https://travis-ci.org/project-fifo/otters.svg?branch=dev)](https://travis-ci.org/project-fifo/otters) [![Hex pm](http://img.shields.io/hexpm/v/otters.svg?style=flat)](https://hex.pm/packages/otters)
 
 
 # OTTERS
