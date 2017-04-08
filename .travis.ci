@@ -1,0 +1,16 @@
+language: erlang
+otp_release:
+  - 18.3
+  - 19.3
+
+sudo: false
+install: true
+script:
+  - ./rebar3 ct
+
+branches:
+  only:
+  - master
+  - dev
+  - test
+~
