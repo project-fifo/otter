@@ -10,7 +10,7 @@ otp_release:
 sudo: false
 install: true
 script:
-  - make test
+  - ./rebar3 ct
 
 branches:
   only:
