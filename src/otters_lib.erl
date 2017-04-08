@@ -30,7 +30,11 @@ i32_to_ip(<<A, B, C, D>>) ->
     {A, B, C, D}.
 
 timestamp() ->
-    erlang:system_time(microsecond).
+    {MeS, S, MuS} = os:timestamp(),
+    (MeS*1000000+S)*1000000+MuS.
+
+%% For some reason not all OSs allow for this :/
+%%    erlang:system_time(microsecond).
 
 id() ->
     <<Id:64>> = crypto:strong_rand_bytes(8),
