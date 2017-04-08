@@ -1,5 +1,6 @@
 [![Build Status][travis_ci_image]][travis_ci]
-[![Hex pm](http://img.shields.io/hexpm/v/katipo.svg?style=flat)](https://hex.pm/packages/katipo)
+
+[![Hex pm](http://img.shields.io/hexpm/v/otters.svg?style=flat)](https://hex.pm/packages/otters)
 
 
 # OTTERS
