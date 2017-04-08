@@ -9,5 +9,4 @@ rel/example_project
 .rebar
 _build/
 *~
-rebar3
 doc

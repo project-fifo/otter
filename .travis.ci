@@ -1,16 +1,19 @@
 language: erlang
+
+before_script:
+  - before_script:
+
 otp_release:
   - 18.3
-  - 19.3
+  - 19.0
 
 sudo: false
 install: true
 script:
-  - ./rebar3 ct
+  - make test
 
 branches:
   only:
   - master
   - dev
   - test
-~
