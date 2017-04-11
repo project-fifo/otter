@@ -1,0 +1,70 @@
+%% -*- erlang -*-
+
+%% @doc How often otters will scan the cache and send batch data
+%% to zapkin.
+{mapping, "otters.batch_interval", "otters.zipkin_batch_interval_ms",
+ [{default, "100ms"},
+  {datatype, {duration, ms}}]}.
+
+%% @doc the Zapkin URL.
+{mapping, "otters.zapkin_url", "otters.zipkin_collector_uri",
+ [{default, "http://172.17.0.2:9411/api/v1/spans"},
+  {datatype, string}]}.
+
+%% @doc The host otters will declare to send datas from.
+{mapping, "otters.host", "otters.zipkin_tag_host_ip",
+ [{default, "127.0.0.1:0"},
+  {datatype, ip}]}.
+
+
+{translation,
+ "otters.zipkin_tag_host_ip",
+ fun(Conf) ->
+         {Host, _Port} = cuttlefish:conf_get("otters.host", Conf),
+         Host
+ end
+}.
+
+{translation,
+ "otters.zipkin_tag_host_port",
+ fun(Conf) ->
+         {_Host, Port} = cuttlefish:conf_get("otters.host", Conf),
+         Port
+ end
+}.
+
+%% @doc Default service name otter reports
+{mapping, "otters.service", "otters.zipkin_tag_host_service",
+ [{default, "otters"},
+  {datatype, string}]}.
+
+%% @doc Weather or not to add the default host to logs or not
+{mapping, "otters.add_service_to_log",
+ "otters.zipkin_add_default_service_to_logs",
+ [{default, "off"},
+  {datatype, flag}]}.
+
+%% @doc Weather or not to add the default host to tags or not
+{mapping, "otters.add_service_to_tags",
+ "otters.zipkin_add_default_service_to_tags",
+ [{default, "off"},
+  {datatype, flag}]}.
+
+%% @doc Default service logs or tags are tagged with.
+{mapping, "otters.default_key", "otters.zipkin_add_host_tag_to_span",
+ [{default, "lc"},
+  {datatype, string}]}.
+
+%% @doc Default service logs or tags are tagged with.
+{mapping, "otters.default_value", "otters.zipkin_add_host_tag_to_span",
+ [{default, ""},
+  {datatype, string}]}.
+
+{translation,
+ "otters.zipkin_add_host_tag_to_span",
+ fun(Conf) ->
+         K = cuttlefish:conf_get("otters.default_key", Conf),
+         V = cuttlefish:conf_get("otters.default_value", Conf),
+         {K, V}
+ end
+}.
