@@ -37,21 +37,21 @@
         ]).
 
 -export_type([info/0, service/0, trace_id/0, span_id/0,
-              span/0, maybe_span/0]).
+              span/0, maybe_span/0, tags/0]).
 
 -type info()       :: binary() | iolist() | atom() | integer().
 -type ip4()        :: {0..255, 0..255, 0..255, 0..255}.
 -type service()    :: binary() | list() | default |
                       {binary() | list(), ip4(), integer()}.
--type trace_id()   :: integer().
--type span_id()    :: integer().
+-type trace_id()   :: non_neg_integer().
+-type span_id()    :: non_neg_integer().
+-type tag()        :: {info(), service() | undefined}.
+-type tags()       :: #{binary() => tag()}.
 -type span()       :: #span{}.
 -type maybe_span() :: span() | undefined.
+
 %% timestamp in microseconds
 -type time_us()    :: non_neg_integer().
-
-
-
 
 
 %% ====================  SPAN function API  ======================
@@ -117,14 +117,9 @@ start_child(Name, ParentSpan)
 -spec tag(maybe_span(), info(), info()) -> maybe_span().
 tag(undefined, _Key, _Value) ->
     undefined;
-tag(Span, Key, Value)
-  when is_record(Span, span) ->
-    Tags = Span#span.tags,
-    Span#span{
-      tags = lists:keystore(Key, 1, Tags, {Key, Value})
-     }.
+tag(Span, Key, Value) ->
+    tag(Span, Key, Value, undefined).
 
--spec tag(maybe_span(), info(), info(), service()) -> maybe_span().
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -132,13 +127,14 @@ tag(Span, Key, Value)
 %% the existing value.
 %% @end
 %%--------------------------------------------------------------------
+-spec tag(maybe_span(), info(), info(), service() | undefined) -> maybe_span().
 tag(undefined, _Key, _Value, _Service) ->
     undefined;
 tag(Span, Key, Value, Service)
   when is_record(Span, span) ->
-    Tags = Span#span.tags,
+    KeyBin = otters_lib:to_bin(Key),
     Span#span{
-      tags = lists:keystore(Key, 1, Tags, {Key, Value, Service})
+      tags = maps:put(KeyBin, {Value, Service}, Span#span.tags)
      }.
 
 %%--------------------------------------------------------------------
