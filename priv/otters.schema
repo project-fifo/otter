@@ -8,14 +8,13 @@
 
 %% @doc the Zapkin URL.
 {mapping, "otters.zapkin_url", "otters.zipkin_collector_uri",
- [{default, "http://172.17.0.2:9411/api/v1/spans"},
+ [{default, "http://127.0.0.1:9411/api/v1/spans"},
   {datatype, string}]}.
 
 %% @doc The host otters will declare to send datas from.
 {mapping, "otters.host", "otters.zipkin_tag_host_ip",
  [{default, "127.0.0.1:0"},
   {datatype, ip}]}.
-
 
 {translation,
  "otters.zipkin_tag_host_ip",
@@ -57,7 +56,7 @@
 
 %% @doc Default service logs or tags are tagged with.
 {mapping, "otters.default_value", "otters.zipkin_add_host_tag_to_span",
- [{default, ""},
+ [{default, "v"},
   {datatype, string}]}.
 
 {translation,
