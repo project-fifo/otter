@@ -13,7 +13,7 @@
 
 %% @doc The host otters will declare to send datas from.
 {mapping, "otters.host", "otters.zipkin_tag_host_ip",
- [{default, {{127, 0, 0, 1}, 0}},
+ [{default, "127.0.0.1:0"},
   {datatype, ip}]}.
 
 {translation,
