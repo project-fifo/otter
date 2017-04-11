@@ -112,7 +112,9 @@ send_spans_http(httpc, ZipkinURL, Data) ->
     end.
 
 encode_spans(Spans) ->
-    encode_implicit_list({struct, [span_to_struct(S) || S <- Spans]}).
+    Data = {struct, [span_to_struct(S) || S <- Spans]},
+    %%io:format("Data: ~p~n", [Data]),
+    encode_implicit_list(Data).
 
 decode_spans(Data) ->
     {{struct, StructList}, _Rest} = decode_implicit_list(Data),
@@ -124,14 +126,15 @@ span_to_struct(#span{
                   name = Name,
                   parent_id = ParentId,
                   logs = Logs,
-                  tags = Tags,
+                  tags = TagsM,
                   timestamp = Timestamp,
                   duration = Duration
                  }) ->
+    Tags = maps:to_list(TagsM),
     FinalTags =
         case otters_config:read(zipkin_add_host_tag_to_span, undefined) of
             {Key, Value} ->
-                [{Key, Value, default} | Tags];
+                [{Key, {Value, default}} | Tags];
             _ ->
                 Tags
         end,
@@ -176,10 +179,10 @@ log_to_annotation({Timestamp, Text, Service}) ->
      {3, struct, host_to_struct(Service)}
     ].
 
-tag_to_binary_annotation({Key, Value}) ->
+tag_to_binary_annotation({Key, {Value, undefined}}) ->
     case otters_config:read(zipkin_add_default_service_to_tags, false) of
         true ->
-            tag_to_binary_annotation({Key, Value, default});
+            tag_to_binary_annotation({Key, {Value, default}});
         false ->
             [
              {1, string, otters_lib:to_bin(Key)},
@@ -187,7 +190,7 @@ tag_to_binary_annotation({Key, Value}) ->
              {3, i32, 6}
             ]
     end;
-tag_to_binary_annotation({Key, Value, Service}) ->
+tag_to_binary_annotation({Key, {Value, Service}}) ->
     [
      {1, string, otters_lib:to_bin(Key)},
      {2, string, otters_lib:to_bin(Value)},
@@ -231,7 +234,7 @@ struct_to_span([{6, list, {struct, Annotations}}| Rest], Span) ->
 struct_to_span([{8, list, {struct, BinAnnotations}}| Rest], Span) ->
     Tags = [bin_annotation_to_tag(BinAnnotation) ||
                BinAnnotation <- BinAnnotations],
-    struct_to_span(Rest, Span#span{tags = Tags});
+    struct_to_span(Rest, Span#span{tags = maps:from_list(Tags)});
 struct_to_span([{10, i64, Timestamp}| Rest], Span) ->
     struct_to_span(Rest, Span#span{timestamp = Timestamp});
 struct_to_span([{11, i64, Duration}| Rest], Span) ->
@@ -258,18 +261,20 @@ annotation_to_log([], Log) ->
     Log.
 
 bin_annotation_to_tag(StructData) ->
-    bin_annotation_to_tag(StructData, {undefined, undefined, undefined}).
+    bin_annotation_to_tag(StructData, {<<"">>, {<<"">>, undefined}}).
 
-bin_annotation_to_tag([{1, string, Key} | Rest], {_, Value, Host}) ->
-    bin_annotation_to_tag(Rest, {Key, Value, Host});
-bin_annotation_to_tag([{2, string, Value} | Rest], {Key, _, Host}) ->
-    bin_annotation_to_tag(Rest, {Key, Value, Host});
-bin_annotation_to_tag([{4, struct, HostStruct} | Rest], {Key, Value, _}) ->
-    bin_annotation_to_tag(Rest, {Key, Value, struct_to_host(HostStruct)});
+-spec bin_annotation_to_tag(
+        [term()], {binary(), {binary(), otters:service() | undefined}})
+                           -> {binary(),
+                               {binary(), otters:service() | undefined}}.
+bin_annotation_to_tag([{1, string, Key} | Rest], {_, {Value, Host}}) ->
+    bin_annotation_to_tag(Rest, {Key, {Value, Host}});
+bin_annotation_to_tag([{2, string, Value} | Rest], {Key, {_, Host}}) ->
+    bin_annotation_to_tag(Rest, {Key, {Value, Host}});
+bin_annotation_to_tag([{4, struct, HostStruct} | Rest], {Key, {Value, _}}) ->
+    bin_annotation_to_tag(Rest, {Key, {Value, struct_to_host(HostStruct)}});
 bin_annotation_to_tag([_ | Rest], Tag) ->
     bin_annotation_to_tag(Rest, Tag);
-bin_annotation_to_tag([], {Key, Value, undefined}) ->
-    {Key, Value};
 bin_annotation_to_tag([], Tag) ->
     Tag.
 
@@ -310,13 +315,13 @@ encode({bool, false}) ->
 encode({byte, Val}) ->
     <<Val>>;
 encode({double, Val}) ->
-    <<Val:64>>;
+    <<Val:64/float>>;
 encode({i16, Val}) ->
-    <<Val:16>>;
+    <<Val:16/signed-integer>>;
 encode({i32, Val}) ->
-    <<Val:32>>;
+    <<Val:32/signed-integer>>;
 encode({i64, Val}) ->
-    <<Val:64>>;
+    <<Val:64/signed-integer>>;
 encode({string, Val}) when is_list(Val) ->
     Size = length(Val),
     %% Might want to convert this to UTF-8 binary first, however for now
@@ -364,13 +369,13 @@ decode(bool, <<Val, Rest/bytes>>) ->
     {Val == 1, Rest};
 decode(byte, <<Val, Rest/bytes>>) ->
     {Val, Rest};
-decode(double, <<Val:64, Rest/bytes>>) ->
+decode(double, <<Val:64/float, Rest/bytes>>) ->
     {Val, Rest};
-decode(i16, <<Val:16, Rest/bytes>>) ->
+decode(i16, <<Val:16/signed-integer, Rest/bytes>>) ->
     {Val, Rest};
-decode(i32, <<Val:32, Rest/bytes>>) ->
+decode(i32, <<Val:32/signed-integer, Rest/bytes>>) ->
     {Val, Rest};
-decode(i64, <<Val:64, Rest/bytes>>) ->
+decode(i64, <<Val:64/signed-integer, Rest/bytes>>) ->
     {Val, Rest};
 decode(string, <<ByteLen:32, BytesAndRest/bytes>>) ->
     <<Bytes:ByteLen/bytes, Rest/bytes>> = BytesAndRest,

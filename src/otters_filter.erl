@@ -19,8 +19,9 @@
 %%%-------------------------------------------------------------------
 
 -module(otters_filter).
--compile(export_all).
 -include("otters.hrl").
+
+-export([span/1]).
 
 %% The main idea behind this filter that the processing of the spans can
 %% be modified runtime by changing the filter configuration. This way
@@ -55,14 +56,17 @@
 %% external interface or dependent on environment (e.g. logging and trace
 %% collecting) should be done asynchronously.
 
+-type filter() :: {[term()], [term()]}.
+
 span(#span{tags = Tags, name = Name, duration = Duration} = Span) ->
     Rules = otters_config:read(filter_rules, []),
-    rules(Rules, [
-        {otters_span_name, Name},
-        {otters_span_duration, Duration}|
-        Tags
-    ], Span).
+    rules(Rules, Tags#{
+                   <<"otters_span_name">> => {Name, undefined},
+                   <<"otters_span_duration">> => {Duration, undefined}
+                  }, Span).
 
+-spec rules([filter()], otter:tags(), otter:span()) ->
+                   ok.
 rules([{Conditions, Actions} | Rest], Tags, Span) ->
     case check_conditions(Conditions, Tags) of
         false ->
@@ -88,50 +92,57 @@ check_conditions([Condition | Rest], Tags) ->
 check_conditions([], _) ->
     true.
 
+
+get_tag(Key, Tags) ->
+    KeyBin = otters_lib:to_bin(Key),
+    maps:find(KeyBin, Tags).
+
 check({negate, Condition}, Tags) ->
     not check(Condition, Tags);
 check({value, Key, Value}, Tags) ->
-    case lists:keyfind(Key, 1, Tags) of
-        {Key, Value} ->
+    case get_tag(Key, Tags) of
+        {ok, {Value, _}} ->
             true;
         _ ->
             false
     end;
 check({same, Key1, Key2}, Tags) ->
-    case lists:keyfind(Key1, 1, Tags) of
-        {Key1, Value} ->
-            case lists:keyfind(Key2, 1, Tags) of
-                {Key2, Value} ->
-                    true;
-                _ ->
-                    false
-            end;
+    case {get_tag(Key1, Tags),
+          get_tag(Key2, Tags)} of
+        {{ok, {Value, _}},
+         {ok, {Value, _}}} ->
+            true;
         _ ->
             false
     end;
 check({greater, Key, Value}, Tags) ->
-    case lists:keyfind(Key, 1, Tags) of
-        {Key, Value1} when Value1 > Value  ->
+    case get_tag(Key, Tags) of
+        {ok, {Value1, _}} when Value1 > Value  ->
             true;
         _ ->
             false
     end;
 check({less, Key, Value}, Tags) ->
-    case lists:keyfind(Key, 1, Tags) of
-        {Key, Value1} when Value1 < Value  ->
+    case get_tag(Key, Tags) of
+        {ok, {Value1, _}} when Value1 < Value  ->
             true;
         _ ->
             false
     end;
 check({between, Key, Value1, Value2}, Tags) ->
-    case lists:keyfind(Key, 1, Tags) of
-        {Key, Value} when Value > Value1 andalso Value < Value2  ->
+    case get_tag(Key, Tags) of
+        {ok, {Value, _}} when Value > Value1 andalso Value < Value2  ->
             true;
         _ ->
             false
     end;
 check({present, Key}, Tags) ->
-    lists:keymember(Key, 1, Tags);
+    case get_tag(Key, Tags) of
+        {ok, _} ->
+            true;
+        _ ->
+            false
+    end;
 check(_, _) ->
     false.
 
@@ -154,12 +165,10 @@ action(send_to_zipkin, Tags, Span) ->
     Tags;
 action({snapshot_count, Prefix, TagNames}, Tags, Span) ->
     TagValues = [
-        case lists:keyfind(Key, 1, Tags) of
-            {Key, Value} -> Value;
+        case get_tag(Key, Tags) of
+            {ok, {Value, _}} -> Value;
             _ -> undefined
-        end ||
-        Key <- TagNames
-    ],
+        end || Key <- TagNames],
     otters_snapshot_count:snapshot(Prefix ++ TagValues, Span),
     Tags;
 action(_, Tags, _) ->
