@@ -13,14 +13,15 @@
 
 %% @doc The host otters will declare to send datas from.
 {mapping, "otters.host", "otters.zipkin_tag_host_ip",
- [{default, "127.0.0.1:0"},
+ [{default, {{127, 0, 0, 1}, 0}},
   {datatype, ip}]}.
 
 {translation,
  "otters.zipkin_tag_host_ip",
  fun(Conf) ->
-         {Host, _Port} = cuttlefish:conf_get("otters.host", Conf),
-         Host
+         {IPs, _Port} = cuttlefish:conf_get("otters.host", Conf),
+         {ok, IP} = inet:parse_ipv4_address(IPs),
+         IP
  end
 }.
 
