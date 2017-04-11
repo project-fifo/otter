@@ -1,6 +1,6 @@
 {application,otters,
     [{description,"OpenTracing Toolkit for Erlang"},
-     {vsn,"0.1.1"},
+     {vsn,"0.1.2"},
      {registered,[otters_sup,otters_snapshot_count,otters_conn_zipkin]},
      {mod,{otters_app,[]}},
      {applications,[kernel,stdlib,ibrowse]},
