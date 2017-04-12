@@ -10,3 +10,13 @@ rel/example_project
 _build/
 *~
 doc
+src/of_lexer.erl
+src/of_parser.erl
+.DS_Store
+.eqc-info
+.eqc/
+.rebar3/
+current_counterexample.eqc
+rebar3.crashdump
+\#*
+.#*

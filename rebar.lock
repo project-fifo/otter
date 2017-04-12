@@ -1,6 +1,8 @@
 {"1.1.0",
-[{<<"ibrowse">>,{pkg,<<"ibrowse">>,<<"4.4.0">>},0}]}.
+[{<<"dynamic_compile">>,{pkg,<<"dynamic_compile">>,<<"1.0.0">>},0},
+ {<<"ibrowse">>,{pkg,<<"ibrowse">>,<<"4.4.0">>},0}]}.
 [
 {pkg_hash,[
+ {<<"dynamic_compile">>, <<"8171B2CB4953EA3ED2EF63F5B26ABF677ACD0CA32210C2A08A7A8406A743F76B">>},
  {<<"ibrowse">>, <<"2D923325EFE0D2CB09B9C6A047B2835A5EDA69D8A47ED6FF8BC03628B764E991">>}]}
 ].
