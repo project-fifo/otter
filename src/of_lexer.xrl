@@ -4,17 +4,20 @@ Definitions.
 ERL       = -erl\s.*
 NUM       = [0-9]+
 WS        = ([\000-\s]|%.*)
+Str1      = '([^']|\.)+'
+%'% damn you syntax highlighter
 Str2      = "([^"]|\.)+"
 %"% damn you syntax highlighter
 Instance  = instance
 KW        = [A-Za-z][A-Za-z0-9_@-]*
-Comp      = (>|>=|<|=<|==)
+Comp      = (>|>=|<|=<|==|/=)
 Arrow     = [-][>]
 Skip      = skip
 Drop      = drop
 Send      = send
 Cont      = continue
 Count     = count
+At        = [@]
 
 
 Rules.
@@ -26,9 +29,12 @@ Rules.
 {Skip}      : {token, {kw_skip,       TokenLine}}.
 {Cont}      : {token, {kw_cont,       TokenLine}}.
 {Count}     : {token, {kw_count,      TokenLine}}.
+{At}        : {token, {kw_at,         TokenLine}}.
 {KW}        : {token, {kw,            TokenLine, TokenChars}}.
 {Comp}      : {token, {cmp,           TokenLine, a(TokenChars)}}.
 {NUM}       : {token, {num,           TokenLine, i(TokenChars)}}.
+{Str1}      : S = strip(TokenChars,   TokenLen),
+              {token, {str,           TokenLine, S}}.
 {Str2}      : S = strip(TokenChars,   TokenLen),
               {token, {str,           TokenLine, S}}.
 

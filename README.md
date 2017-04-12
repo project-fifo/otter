@@ -11,7 +11,6 @@ OpenTracing Toolkit for Erlang
 
 
 
-
 ## Build
 
 OTTER uses [rebar3](http://www.rebar3.org) as build tool. It can be built
@@ -342,8 +341,7 @@ connector. It was simpler to explain them though in this context.
 
 ### Span Filtering
 
-When the collection of **span** information is completed (i.e. span_pend
-or span_end/1 is called), filtering is invoked. Filtering is based on the
+When the collection of **span** information is completed (i.e. `finish` is called), filtering is invoked. Filtering is based on the
 tags collected in the span with the **span name** and the
 **span duration** added to the key/value pair list with keys :
 **otter_span_name** and **otter_span_duration**. The resulting
@@ -352,12 +350,12 @@ key/value pair list which is used as input of the filter rules. With the
 
 ```erlang
     [
-        {otter_span_name, "radius request"},
-        {otter_span_duration, 1202},
-        {"request_id", "6390266399200312"},
-        {"user_db_result", "ok"},
-        {"final_result", "error"},
-        {"final_result_reason", "unknown user"}
+        {<<"otter_span_name">>, "radius request"},
+        {<<"otter_span_duration">>, 1202},
+        {<<"request_id">>, "6390266399200312"},
+        {<<"user_db_result">>, "ok"},
+        {<<"final_result">>, "error"},
+        {<<"final_result_reason">>, "unknown user"}
     ]
 ```
 
@@ -366,7 +364,85 @@ pairs. In each pair the, conditions are a list of checks against the
 key/value pair list. If all conditions in the list are true, the actions
 are executed. An empty condition list always returns a positive match.
 
-#### Filter conditions
+
+#### Filtering language
+
+Otters uses a filter language that is dynamically compiled to a erlang module for performance. The Module is called `ol_filter`.
+
+The filter language is loosely based on Erlang syntax and functions a bit like firewall rules.
+
+A multiple filter rules can be used, and each filter can have multiple conditions on which actions are taken.
+
+The general syntax is:
+
+```erlang
+<name>([<condition>]) ->
+  <action>.
+```
+
+##### Conditions
+
+Basic conditions are:
+
+- none : (as in `()`) always matches.
+- `<key> <comparison> <value>`: where `comparison` is either `>`, `<`, `>=`, `=<`, `==` or `/=`
+- `<key>`: weather or not a key is present
+
+##### Actions
+
+Possible actions are:
+
+- `drop`: stops filtering for this and the following rules.
+- `skip`: skips the rest of this rule and continues with the next.
+- `send`: sends the span
+- `continue` : only continues the current otherwise skips
+- `count(<values>, ...)`: where values can either be a string `'bla'` which is taken literally or a keyword `otter_span_duration` to lookup the value.
+
+##### Examples
+
+Comparing the old style filters
+```erlang
+    [
+        {
+            %% Condition
+            [
+                {greater, "otter_span_duration", 5000000},
+                {value, "otter_span_name", "radius request"}
+            ],
+            %% Action
+            [
+                {snap_count, [long_radius_request], []},
+                send_to_zipkin
+            ]
+        },
+        {
+            %% Condition counts all requests with name and result
+            [
+            ],
+            %% Action
+            [
+                {snap_count, [request], ["otter_span_name", "final_result"]}
+            ]
+        }
+
+    ]
+```
+
+Translate to
+```erlang
+slow_spans(otter_span_duration > 5000000) -> continue.
+%% Skip requests that are not radius requests
+slow_spans(otter_span_name == 'radius request') -> continue.
+%% Count
+slow_spans() -> count('long_radius_request').
+%% Send
+slow_spans() -> send.
+
+%% Count them all
+count() -> count('request', otter_span_name, final_result).  
+```
+
+#### Filter conditions (old style)
 
 ##### Check the presence of a Key
 

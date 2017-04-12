@@ -6,7 +6,8 @@
   {applications,
    [kernel,
     stdlib,
-    ibrowse
+    ibrowse,
+    dynamic_compile
    ]},
   {env,[
     {http_client, ibrowse},
