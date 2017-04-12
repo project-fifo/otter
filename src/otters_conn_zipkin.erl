@@ -204,9 +204,12 @@ host_to_struct(default) ->
                        atom_to_list(node())
                       ),
     host_to_struct(DefaultService);
-host_to_struct(Service) when is_binary(Service) orelse is_list(Service) ->
+host_to_struct(Service)
+  when is_binary(Service);
+       is_list(Service);
+       is_atom(Service) ->
     host_to_struct({
-                     Service,
+                     otters_lib:to_bin(Service),
                      otters_config:read(zipkin_tag_host_ip, {127, 0, 0, 1}),
                      otters_config:read(zipkin_tag_host_port, 0)
                    });
