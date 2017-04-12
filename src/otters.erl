@@ -45,7 +45,8 @@
                       {binary() | list(), ip4(), integer()}.
 -type trace_id()   :: non_neg_integer().
 -type span_id()    :: non_neg_integer().
--type tag()        :: {info(), service() | undefined}.
+-type tag()        :: {info(), service() | undefined}
+                    | binary() | string() | atom().
 -type tags()       :: #{binary() => tag()}.
 -type span()       :: #span{}.
 -type maybe_span() :: span() | undefined.
