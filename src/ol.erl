@@ -1,5 +1,5 @@
 -module(ol).
--export([compile/1, clear/0]).
+-export([compile/1, clear/0, check/2]).
 
 compile(S) ->
     {ok, T, _} = of_lexer:string(S),
@@ -13,6 +13,24 @@ clear() ->
     code:purge(ol_filter),
     code:delete(ol_filter).
 
+check(Tags, Span) ->
+    {ok, Actions} =  ol_filter:check(Tags),
+    perform(Actions, Span).
+
+perform([], _Span) ->
+    ok;
+perform([send | Rest], Span) ->
+    otters_conn_zipkin:store_span(Span),
+    perform(Rest, Span);
+perform([{count, Path} | Rest], Span) ->
+    otters_snapshot_count:snapshot(Path, Span),
+    perform(Rest, Span).
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+
 group_rules([{Name, Test, Result} | Rest]) ->
     group_rules(Rest, Name, [{Test, Result}], []).
 
@@ -20,11 +38,11 @@ group_rules([{Name, Test, Result} | Rest], Name, Conditions, Acc) ->
     group_rules(Rest, Name, [{Test, Result} | Conditions], Acc);
 group_rules([{Name, Test, Result} | Rest], LastName, Conditions, Acc) ->
     case lists:keyfind(Name, 1, Acc) of
-        true ->
-            {error, {already_defined, Name}};
         false ->
             Acc1 = [{LastName, lists:reverse(Conditions)} | Acc],
-            group_rules(Rest, Name, [{Test, Result}], Acc1)
+            group_rules(Rest, Name, [{Test, Result}], Acc1);
+        _ ->
+            {error, {already_defined, Name}}
     end;
 group_rules([], LastName, Conditions, Acc) ->
     Acc1 = [{LastName, lists:reverse(Conditions)} | Acc],
