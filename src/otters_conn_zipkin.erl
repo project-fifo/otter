@@ -33,6 +33,7 @@
 -define(T_i64,    10).
 -define(T_string, 11).
 -define(T_struct, 12).
+-define(T_list, 15).
 
 sup_init() ->
     [
@@ -118,8 +119,15 @@ send_spans_http(httpc, ZipkinURL, Data) ->
     end.
 
 encode_spans(Spans) ->
-    Data = {struct, [span_to_struct(S) || S <- Spans]},
-    encode_implicit_list(Data).
+    Size = length(Spans),
+    AddDfltToLog = otters_config:read(zipkin_add_default_service_to_logs,
+                                      false),
+    AddDfltToTag = otters_config:read(zipkin_add_default_service_to_tags,
+                                      false),
+    <<?T_struct, Size:32,
+      << << (span_to_struct(S, AddDfltToLog, AddDfltToTag))/binary >>
+         || S <- Spans>>/bytes>>.
+
 
 decode_spans(Data) ->
     {{struct, StructList}, _Rest} = decode_implicit_list(Data),
@@ -134,7 +142,7 @@ span_to_struct(#span{
                   tags = TagsM,
                   timestamp = Timestamp,
                   duration = Duration
-                 }) ->
+                 }, AddDfltToLog, AddDfltToTag) ->
     Tags = maps:to_list(TagsM),
     FinalTags =
         case otters_config:read(zipkin_add_host_tag_to_span, undefined) of
@@ -143,41 +151,46 @@ span_to_struct(#span{
             _ ->
                 Tags
         end,
-    [
-     {1, i64, TraceId},
-     {3, string, otters_lib:to_bin(Name)},
-     {4, i64, Id}
-    ] ++
-        case ParentId of
-            undefined ->
-                [];
-            ParentId ->
-                [{5, i64, ParentId}]
-        end ++
-        [
-         {6, list, {
-               struct,
-               [log_to_annotation(Log) || Log <- Logs]
-              }},
-         {8, list, {
-               struct,
-               [tag_to_binary_annotation(Tag) || Tag <- FinalTags]
-              }},
-         {10, i64, Timestamp},
-         {11, i64, Duration}
-        ].
+    LogSize = length(Logs),
+    TagSize = length(FinalTags),
+    NameBin = otters_lib:to_bin(Name),
+    ParentBin =case ParentId of
+                   undefined ->
+                       <<>>;
+                   ParentId ->
+                       <<?T_i64, 5:16, ParentId:64/signed-integer>>
+               end,
+    LogsBin = << <<(log_to_annotation(Log, AddDfltToLog))/binary>>
+                 || Log <- Logs >>,
+    TagsBin = << <<(tag_to_binary_annotation(Tag, AddDfltToTag))/binary>>
+                 || Tag <- FinalTags >>,
+    <<
+      %% Header
+      ?T_i64,    1:16, TraceId:64/signed-integer,
+      ?T_string, 3:16, (byte_size(NameBin)):32, NameBin/binary,
+      ?T_i64,    4:16, Id:64/signed-integer,
+      ParentBin/binary,
+      %% Logs
+      ?T_list,   6:16, ?T_struct, LogSize:32, LogsBin/bytes,
+      %% Tags
+      ?T_list,   8:16, ?T_struct, TagSize:32, TagsBin/bytes,
+      %% Tail
+      ?T_i64,   10:16, Timestamp:64/signed-integer,
+      ?T_i64,   11:16, Duration:64/signed-integer,
+      0
+    >>.
 
-log_to_annotation({Timestamp, Text}) ->
-    case otters_config:read(zipkin_add_default_service_to_logs, false) of
+log_to_annotation({Timestamp, Text}, AddDfltToLog) ->
+    case AddDfltToLog of
         true ->
-            log_to_annotation({Timestamp, Text, default});
+            log_to_annotation({Timestamp, Text, default}, AddDfltToLog);
         false ->
             TextBin = otters_lib:to_bin(Text),
             <<?T_i64, 1:16, Timestamp:64/signed-integer,
               ?T_string, 2:16, (byte_size(TextBin)):32, TextBin/binary,
               0>>
     end;
-log_to_annotation({Timestamp, Text, Service}) ->
+log_to_annotation({Timestamp, Text, Service}, _AddDfltToLog) ->
     TextBin = otters_lib:to_bin(Text),
     HostBin = host_to_struct(Service),
     <<?T_i64,    1:16, Timestamp:64/signed-integer,
@@ -185,23 +198,17 @@ log_to_annotation({Timestamp, Text, Service}) ->
       ?T_struct, 3:16, HostBin/binary,
       0>>.
 
-    %% encode({struct, [
-    %%                 {1, i64, Timestamp},
-    %%                 {2, string, otters_lib:to_bin(Text)},
-    %%                 {3, struct, host_to_struct(Service)}
-    %%                ]}).
-
-tag_to_binary_annotation({Key, {Value, undefined}}) ->
-    case otters_config:read(zipkin_add_default_service_to_tags, false) of
+tag_to_binary_annotation({Key, {Value, undefined}}, UseDefault) ->
+    case UseDefault of
         true ->
-            tag_to_binary_annotation({Key, {Value, default}});
+            tag_to_binary_annotation({Key, {Value, default}}, UseDefault);
         false ->
             ValueBin = otters_lib:to_bin(Value),
             <<?T_string, 1:16, (byte_size(Key)):32, Key/binary,
               ?T_string, 2:16, (byte_size(ValueBin)):32, ValueBin/binary,
               ?T_i32,    3:16, 6:32/signed-integer, 0>>
     end;
-tag_to_binary_annotation({Key, {Value, Service}}) when is_binary(Key) ->
+tag_to_binary_annotation({Key, {Value, Service}}, _) when is_binary(Key) ->
     ValueBin = otters_lib:to_bin(Value),
     HostBin = host_to_struct(Service),
     <<?T_string, 1:16, (byte_size(Key)):32, Key/binary,
@@ -210,8 +217,8 @@ tag_to_binary_annotation({Key, {Value, Service}}) when is_binary(Key) ->
       ?T_struct, 4:16, HostBin/binary,
       0>>;
 
-tag_to_binary_annotation({Key, {Value, Service}}) ->
-    tag_to_binary_annotation({otters_lib:to_bin(Key), {Value, Service}}).
+tag_to_binary_annotation({Key, {Value, Service}}, UseDefault) ->
+    tag_to_binary_annotation({otters_lib:to_bin(Key), {Value, Service}}, UseDefault).
 
 host_to_struct(default) ->
     DefaultService = otters_config:read(
@@ -234,11 +241,6 @@ host_to_struct({Service, Ip, Port}) ->
       ?T_i16,    2:16, Port:16/signed-integer,
       ?T_string, 3:16, (byte_size(Service)):32, Service/binary,
       0>>.
-    %% [
-    %%  {1, i32, otters_lib:ip_to_i32(Ip)},
-    %%  {2, i16, Port},
-    %%  {3, string, Service}
-    %% ].
 
 struct_to_span(StructData) ->
     struct_to_span(StructData, #span{}).
@@ -322,66 +324,6 @@ struct_to_host([], Host) ->
 decode_implicit_list(BinaryData) ->
     decode(list, BinaryData).
 
-encode_implicit_list(Data) ->
-    encode({list, Data}).
-
-%% Encoding functions
-encode({Id, Type, Data}) ->
-    TypeId = map_type(Type),
-    EData = encode({Type, Data}),
-    <<TypeId, Id:16, EData/bytes>>;
-%% .. and without Id (i.e. part of list/set/map)
-encode({raw, B}) ->
-    B;
-encode({bool, true}) ->
-    <<1>>;
-encode({bool, false}) ->
-    <<0>>;
-encode({byte, Val}) ->
-    <<Val>>;
-encode({double, Val}) ->
-    <<Val:64/float>>;
-encode({i16, Val}) ->
-    <<Val:16/signed-integer>>;
-encode({i32, Val}) ->
-    <<Val:32/signed-integer>>;
-encode({i64, Val}) ->
-    <<Val:64/signed-integer>>;
-encode({string, Val}) when is_list(Val) ->
-    Size = length(Val),
-    %% Might want to convert this to UTF-8 binary first, however for now
-    %% I'll leave it to the next encoding when binary can be provided in
-    %% UTF-8 format. In this part is kindly expected it to be ASCII
-    %% string
-    Bytes = list_to_binary(Val),
-    <<Size:32, Bytes/bytes>>;
-encode({string, Val}) when is_binary(Val) ->
-    Size = byte_size(Val),
-    <<Size:32, Val/bytes>>;
-encode({list, {ElementType, Data}}) ->
-    ElementTypeId = map_type(ElementType),
-    Size = length(Data),
-    EData = << <<(encode({ElementType, Element}))/binary>> || Element <- Data>>,
-    <<ElementTypeId, Size:32, EData/bytes>>;
-encode({set, Data}) ->
-    encode({list, Data});
-%% If we have a struct w/ binary data this is pre-encoded
-encode({struct, Data}) when is_binary(Data) ->
-    Data;
-encode({struct, Data}) ->
-    EData = << <<(encode(StructElement))/binary>> || StructElement <- Data >>,
-    <<EData/bytes, 0>>;
-encode({map, {KeyType, ValType, Data}}) ->
-    KeyTypeId = map_type(KeyType),
-    ValTypeId = map_type(ValType),
-    Size = length(Data),
-    EData = <<
-              <<(encode({KeyType, Key}))/binary,
-                (encode({ValType, Val}))/binary>>  ||
-                {Key, Val} <- Data
-            >>,
-    <<KeyTypeId, ValTypeId, Size:32, EData/bytes>>.
-
 %% Decoding functions
 decode(<<TypeId, Id:16, Data/bytes>>) ->
     Type = map_type(TypeId),
@@ -457,7 +399,7 @@ map_type(?T_string) -> string;
 map_type(?T_struct) -> struct;
 map_type(13)    -> map;
 map_type(14)    -> set;
-map_type(15)    -> list;
+map_type(?T_list)   -> list;
 map_type(bool)  -> 2;
 map_type(byte)  -> 3;
 map_type(double)-> 4;
@@ -468,4 +410,4 @@ map_type(string)-> ?T_string;
 map_type(struct)-> ?T_struct;
 map_type(map)   -> 13;
 map_type(set)   -> 14;
-map_type(list)  -> 15.
+map_type(list)  -> ?T_list.

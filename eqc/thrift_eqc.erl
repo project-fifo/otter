@@ -42,6 +42,14 @@ new_span() ->
        logs      = logs()
       }.
 
+ip() ->
+    {127, choose(0, 254), choose(0, 254), choose(1, 254)}.
+
+service() ->
+    oneof([default,
+           {binary(), ip(), pos_int()},
+           binary()]).
+
 span(0) ->
     new_span();
 
@@ -49,9 +57,9 @@ span(Size) ->
     ?LAZY(oneof(
             [
              {call, otters, log, [span(Size -1), binary()]},
-             {call, otters, log, [span(Size -1), binary(), binary()]},
+             {call, otters, log, [span(Size -1), binary(), service()]},
              {call, otters, tag, [span(Size -1), binary(), binary()]},
-             {call, otters, tag, [span(Size -1), binary(), binary(), binary()]}
+             {call, otters, tag, [span(Size -1), binary(), binary(), service()]}
             ])).
 
 span() ->
@@ -81,7 +89,9 @@ cleanup(S = #span{
      }.
 
 clean_tags(Tags) ->
-    maps:map(fun (_, {V, {S, {127,0,0,1}, 0}}) ->
+    maps:map(fun (_, {V, {<<"otters_test">>, {127,0,0,1}, 0}}) ->
+                     {V, default};
+                 (_, {V, {S, {127,0,0,1}, 0}}) ->
                      {V, S};
                  (_, V) ->
                      V
@@ -91,7 +101,9 @@ clean_logs(Logs) ->
     [clean_log(L) || L <- Logs].
 
 
-clean_log({T,V,{S,_,_}}) ->
+clean_log({T, V, {<<"otters_test">>, {127,0,0,1}, 0}}) ->
+    {T, V, default};
+clean_log({T, V, {S, {127,0,0,1}, 0}}) ->
     {T, V, S};
 clean_log(O) ->
     O.
