@@ -16,7 +16,7 @@ install: true
 script:
   - ./rebar3 xref
   - ./rebar3 dialyzer
-  - ./rebar3 ct
+  - ./rebar3 ct --suite test/otter_SUITE
 
 branches:
   only:

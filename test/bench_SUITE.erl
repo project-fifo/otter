@@ -5,10 +5,12 @@
 
 -export([all/0,
          bench_old_filter/1, bench_new_filter/1,
-         bench_old_filter_large/1, bench_new_filter_large/1]).
+         bench_old_filter_large/1, bench_new_filter_large/1,
+         bench_encoding/1]).
 
 all() ->
-    [bench_old_filter, bench_new_filter,
+    [bench_encoding,
+     bench_old_filter, bench_new_filter,
      bench_old_filter_large, bench_new_filter_large].
 
 bench_old_filter(_) ->
@@ -265,8 +267,10 @@ run(Fn) ->
                 end,
     meck:unload(otters_conn_zipkin),
     meck:unload(otters_snapshot_count),
-    io:format(user, "~.2f microseconds / span.~n", [T / (Count * length(Spans))]),
-    io:format(user, "  Logged a total of ~p spans.~n", [LogCount + LogLongCount]),
+    io:format(user, "~.2f microseconds / span.~n",
+              [T / (Count * length(Spans))]),
+    io:format(user, "  Logged a total of ~p spans.~n",
+              [LogCount + LogLongCount]),
     io:format(user, "  Send a total of ~p spans.~n", [SendCount]),
     %% We log 2 out of 3 messages so we need to multiply this
     %% by 2
@@ -276,6 +280,27 @@ run(Fn) ->
     ?assertEqual(Count, LogLongCount),
     ?assertEqual(Count, SendCount).
 
+%%% Original
+%%% Encoding: 422.18 microseconds / span.
+%%% Decoding: 140.12 microseconds / span.
+%%% bench_SUITE ==> bench_encoding: OK
+%%% New
+%%% Encoding: 9.73 microseconds / span.
+%%% Decoding: 127.38 microseconds / span.
+%%% bench_SUITE ==> bench_encoding: OK
+bench_encoding(_) ->
+    Count = 100000,
+    Spans = mk_spans(),
+    Spans1 = [Spans || _ <- lists:seq(1, Count)],
+    Spans2 = lists:flatten(Spans1),
+    Total = length(Spans2),
+    {Te, Encoded} = timer:tc(otters_conn_zipkin, encode_spans, [Spans2]),
+    io:format(user, "Encoding: ~.2f microseconds / span.~n",
+              [Te / Total]),
+    {Td, _} = timer:tc(otters_conn_zipkin, decode_spans, [Encoded]),
+    io:format(user, "Decoding: ~.2f microseconds / span.~n",
+              [Td / Total]),
+    ok.
 
 c_l(N) ->
     receive
@@ -300,7 +325,7 @@ run_spans([S | R]) ->
 mk_spans() ->
     S = mk_span(),
     Tags = S#span.tags,
-    Tags1 = Tags#{<<"final_result">> => <<"yay!">>},
+    Tags1 = Tags#{<<"final_result">> => {<<"yay!">>, undefined}},
     [
      %% Matches no rules
      S,
@@ -312,21 +337,30 @@ mk_spans() ->
     %%[S].
 
 
-
 mk_span() ->
     #span{
+       id        = 0,
+       timestamp = 0,
+       trace_id  = 0,
        duration = 100,
        name = <<"other request">>,
        tags = #{
-         <<"1">> => 1,
-         <<"2">> => 1,
-         <<"3">> => 1,
-         <<"4">> => 1,
-         <<"5">> => 1,
-         <<"6">> => 1,
-         <<"7">> => 1,
-         <<"8">> => 1,
-         <<"9">> => 1,
-         <<"10">> => 1
-        }
+         <<"1">> => {1, undefined},
+         <<"2">> => {<<"hello">>, undefined},
+         <<"3">> => {1, default},
+         <<"4">> => {1, undefined},
+         <<"5">> => {<<"hello">>, default},
+         <<"6">> => {1, {<<"test">>, {127, 0, 0, 1}, 1}},
+         <<"7">> => {1, undefined},
+         <<"8">> => {<<"hello">>, undefined},
+         <<"9">> => {1, default},
+         <<"10">> => {1, {<<"test">>, {127, 0, 0, 1}, 1}}
+        },
+       logs = [
+               {1, <<"test">>, default},
+               {2, <<"bla">>, undefined},
+               {3, <<"blubber">>, default},
+               {4, <<"hello">>, {<<"test">>, {127, 0, 0, 1}, 1}},
+               {5, <<"world">>}
+              ]
       }.
