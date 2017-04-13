@@ -282,6 +282,10 @@ run(Fn) ->
 %%% Encoding: 422.18 microseconds / span.
 %%% Decoding: 140.12 microseconds / span.
 %%% bench_SUITE ==> bench_encoding: OK
+%%% New
+%%% Encoding: 9.73 microseconds / span.
+%%% Decoding: 127.38 microseconds / span.
+%%% bench_SUITE ==> bench_encoding: OK
 bench_encoding(_) ->
     Count = 100000,
     Spans = mk_spans(),
