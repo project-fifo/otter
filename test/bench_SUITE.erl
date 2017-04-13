@@ -279,8 +279,8 @@ run(Fn) ->
     ?assertEqual(Count, SendCount).
 
 %%% Original
-%%% Encoding: 52.27 microseconds / span.
-%%% Decoding: 63.48 microseconds / span.
+%%% Encoding: 61.55 microseconds / span.
+%%% Decoding: 77.08 microseconds / span.
 %%% bench_SUITE ==> bench_encoding: OK
 bench_encoding(_) ->
     Count = 100000,
@@ -349,5 +349,10 @@ mk_span() ->
          <<"8">> => {1, undefined},
          <<"9">> => {1, undefined},
          <<"10">> => {1, undefined}
-        }
+        },
+       logs = [
+               {1, <<"test">>},
+               {2, <<"bla">>},
+               {3, <<"blubber">>}
+              ]
       }.
