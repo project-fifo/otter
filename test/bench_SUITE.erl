@@ -3,10 +3,13 @@
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("otters/include/otters.hrl").
 
--export([all/0, bench_old_filter/1, bench_new_filter/1]).
+-export([all/0,
+         bench_old_filter/1, bench_new_filter/1,
+         bench_old_filter_large/1, bench_new_filter_large/1]).
 
 all() ->
-    [bench_new_filter, bench_old_filter].
+    [bench_old_filter, bench_new_filter,
+     bench_old_filter_large, bench_new_filter_large].
 
 bench_old_filter(_) ->
     %% Set the filter
@@ -24,6 +27,7 @@ bench_old_filter(_) ->
                  send_to_zipkin
                 ]
               },
+
               {
                 %% Condition counts all requests with name and result
                 [{present, <<"final_result">>}],
@@ -34,7 +38,166 @@ bench_old_filter(_) ->
              ],
     otters_config:write(filter_rules, Filter),
     ol:clear(),
-    run().
+    run(fun run_spans_f/1).
+
+bench_old_filter_large(_) ->
+    %% Set the filter
+    %%application:ensure_all_started(otters),
+    Filter = [
+              {
+                %% Condition
+                [
+                 {greater, <<"otters_span_duration">>, 5000000},
+                 {value, <<"otters_span_name">>, <<"radius request">>}
+                ],
+                %% Action
+                [
+                 {snapshot_count, [long_radius_request], []},
+                 send_to_zipkin
+                ]
+              },
+              {[{greater, <<"otters_span_duration">>, 5000000},
+                 {value, <<"otters_span_name">>, <<"radius request">>}],
+                [{snapshot_count, [<<"i">>], []}]},
+              {[{greater, <<"otters_span_duration">>, 5000000},
+                 {value, <<"otters_span_name">>, <<"radius request">>}],
+                [{snapshot_count, [<<"i">>], []}]},
+              {[{greater, <<"otters_span_duration">>, 5000000},
+                 {value, <<"otters_span_name">>, <<"radius request">>}],
+                [{snapshot_count, [<<"i">>], []}]},
+              {[{greater, <<"otters_span_duration">>, 5000000},
+                 {value, <<"otters_span_name">>, <<"radius request">>}],
+                [{snapshot_count, [<<"i">>], []}]},
+              {[{greater, <<"otters_span_duration">>, 5000000},
+                 {value, <<"otters_span_name">>, <<"radius request">>}],
+                [{snapshot_count, [<<"i">>], []}]},
+              {[{greater, <<"otters_span_duration">>, 5000000},
+                 {value, <<"otters_span_name">>, <<"radius request">>}],
+                [{snapshot_count, [<<"i">>], []}]},
+              {[{greater, <<"otters_span_duration">>, 5000000},
+                 {value, <<"otters_span_name">>, <<"radius request">>}],
+                [{snapshot_count, [<<"i">>], []}]},
+              {[{greater, <<"otters_span_duration">>, 5000000},
+                 {value, <<"otters_span_name">>, <<"radius request">>}],
+                [{snapshot_count, [<<"i">>], []}]},
+              {[{greater, <<"otters_span_duration">>, 5000000},
+                 {value, <<"otters_span_name">>, <<"radius request">>}],
+                [{snapshot_count, [<<"i">>], []}]},
+
+              {
+                %% Condition counts all requests with name and result
+                [{present, <<"final_result">>}],
+                %% Action
+                [{snapshot_count, [request],
+                  [<<"otters_span_name">>, <<"final_result">>]}]
+              }
+             ],
+    otters_config:write(filter_rules, Filter),
+    ol:clear(),
+    run(fun run_spans_f/1).
+
+bench_new_filter_large(_) ->
+    %% Set the filter
+    %%application:ensure_all_started(otters),
+    Filter = "%% If our span takes less then 5s skip the rest of the rules\n"
+        "slow_spans(otters_span_duration > 5000000) ->\n"
+        "    continue.\n"
+        "%% Skip requests that are not radius requests\n"
+        "slow_spans(otters_span_name == 'radius request') ->\n"
+        "    continue.\n"
+        "%% Count\n"
+        "slow_spans() ->\n"
+        "    count('long_radius_request').\n"
+        "%% Send\n"
+        "slow_spans() ->\n"
+        "    send.\n"
+
+        "slow_spans1(otters_span_duration > 5000000) ->\n"
+        "    continue.\n"
+        "%% Skip requests that are not radius requests\n"
+        "slow_spans1(otters_span_name == 'radius request') ->\n"
+        "    continue.\n"
+        "%% Count\n"
+        "slow_spans1() ->\n"
+        "    count('i').\n"
+
+        "slow_spans2(otters_span_duration > 5000000) ->\n"
+        "    continue.\n"
+        "%% Skip requests that are not radius requests\n"
+        "slow_spans2(otters_span_name == 'radius request') ->\n"
+        "    continue.\n"
+        "%% Count\n"
+        "slow_spans2() ->\n"
+        "    count('i').\n"
+
+        "slow_spans3(otters_span_duration > 5000000) ->\n"
+        "    continue.\n"
+        "%% Skip requests that are not radius requests\n"
+        "slow_spans3(otters_span_name == 'radius request') ->\n"
+        "    continue.\n"
+        "%% Count\n"
+        "slow_spans3() ->\n"
+        "    count('i').\n"
+
+        "slow_spans4(otters_span_duration > 5000000) ->\n"
+        "    continue.\n"
+        "%% Skip requests that are not radius requests\n"
+        "slow_spans4(otters_span_name == 'radius request') ->\n"
+        "    continue.\n"
+        "%% Count\n"
+        "slow_spans4() ->\n"
+        "    count('i').\n"
+
+        "slow_spans5(otters_span_duration > 5000000) ->\n"
+        "    continue.\n"
+        "%% Skip requests that are not radius requests\n"
+        "slow_spans5(otters_span_name == 'radius request') ->\n"
+        "    continue.\n"
+        "%% Count\n"
+        "slow_spans5() ->\n"
+        "    count('i').\n"
+
+        "slow_spans6(otters_span_duration > 5000000) ->\n"
+        "    continue.\n"
+        "%% Skip requests that are not radius requests\n"
+        "slow_spans6(otters_span_name == 'radius request') ->\n"
+        "    continue.\n"
+        "%% Count\n"
+        "slow_spans6() ->\n"
+        "    count('i').\n"
+
+        "slow_spans7(otters_span_duration > 5000000) ->\n"
+        "    continue.\n"
+        "%% Skip requests that are not radius requests\n"
+        "slow_spans7(otters_span_name == 'radius request') ->\n"
+        "    continue.\n"
+        "%% Count\n"
+        "slow_spans7() ->\n"
+        "    count('i').\n"
+
+        "slow_spans8(otters_span_duration > 5000000) ->\n"
+        "    continue.\n"
+        "%% Skip requests that are not radius requests\n"
+        "slow_spans8(otters_span_name == 'radius request') ->\n"
+        "    continue.\n"
+        "%% Count\n"
+        "slow_spans8() ->\n"
+        "    count('i').\n"
+
+        "slow_spans9(otters_span_duration > 5000000) ->\n"
+        "    continue.\n"
+        "%% Skip requests that are not radius requests\n"
+        "slow_spans9(otters_span_name == 'radius request') ->\n"
+        "    continue.\n"
+        "%% Count\n"
+        "slow_spans9() ->\n"
+        "    count('i').\n"
+
+        "%% Count them all\n"
+        "count(final_result) ->\n"
+        "    count('request', otter_span_name, final_result).\n" ,
+    ol:compile(Filter),
+    run(fun run_spans/1).
 
 bench_new_filter(_) ->
     %% Set the filter
@@ -55,9 +218,9 @@ bench_new_filter(_) ->
         "count(final_result) ->\n"
         "    count('request', otter_span_name, final_result).\n" ,
     ol:compile(Filter),
-    run().
+    run(fun run_spans/1).
 
-run() ->
+run(Fn) ->
     Send = spawn(fun() -> c_l(0) end),
     Log = spawn(fun() -> c_l(0) end),
     LogLong = spawn(fun() -> c_l(0) end),
@@ -72,6 +235,8 @@ run() ->
                         LogLong ! inc;
                     ([long_radius_request], _) ->
                         LogLong ! inc;
+                    ([<<"i">>], _) ->
+                        ok;
                     (_, _) ->
                         Log ! inc
                 end),
@@ -80,7 +245,7 @@ run() ->
     Seq = lists:seq(1, Count),
     {T, _} = timer:tc(fun () ->
                               lists:foreach(fun(_) ->
-                                                    run_spans(Spans)
+                                                    Fn(Spans)
                                             end, Seq)
                       end),
     Log ! {get, self()},
@@ -120,10 +285,16 @@ c_l(N) ->
             c_l(N + 1)
     end.
 
+run_spans_f([]) ->
+    ok;
+run_spans_f([S | R]) ->
+    otters_filter:span(S),
+    run_spans_f(R).
+
 run_spans([]) ->
     ok;
 run_spans([S | R]) ->
-    otters_filter:span(S),
+    ol:span(S),
     run_spans(R).
 
 mk_spans() ->

@@ -1,5 +1,6 @@
 -module(ol).
--export([compile/1, clear/0, check/2]).
+-include("otters.hrl").
+-export([span/1, compile/1, clear/0, check/2]).
 
 compile(S) ->
     {ok, T, _} = of_lexer:string(S),
@@ -28,6 +29,13 @@ perform([{count, Path} | Rest], Span) ->
     otters_snapshot_count:snapshot(Path, Span),
     perform(Rest, Span).
 
+span(#span{tags = Tags, name = Name, duration = Duration} = Span) ->
+    Tags1 = Tags#{
+              <<"otters_span_name">>     => {Name, undefined},
+              <<"otters_span_duration">> => {Duration, undefined}
+             },
+    check(Tags1, Span).
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -53,6 +61,7 @@ group_rules([], LastName, Conditions, Acc) ->
 render(Cs) ->
     ["-module(ol_filter).\n",
      "-export([check/1]).\n",
+     "-compile(inline).\n",
      "\n",
      "check(Tags) ->\n",
      "  ", rule_name(0), "(Tags, []).\n",
@@ -89,6 +98,58 @@ render_clauses(Name, [{undefined, drop} | R], NextRule, N) ->
      "  Acc.\n",
      render_clauses(Name, R, NextRule, N + 1)];
 
+render_clauses(Name, [{{exists, Key}, Action} | R], NextRule, N) ->
+    [rule_name(Name, N),
+     io_lib:format("(Tags = #{<<\"~s\">> := _}, Acc) ->\n", [Key]),
+     "  ", render_action(Action, Name, N, NextRule), ";\n",
+     rule_name(Name, N), "(Tags, Acc) ->\n",
+     "  ", rule_name(Name, N+1), "(Tags, Acc).\n",
+     render_clauses(Name, R, NextRule, N + 1)];
+
+
+%% If we have mutliple continues in a row we can combine them,
+%% this combines two continues.
+
+render_clauses(Name, [{{Cmp1, Key1, V1}, continue},
+                      {{Cmp2, Key2, V2}, continue}| R], NextRule, N) ->
+    {Body, R1} = continue_body(R, Name, N, NextRule),
+    [rule_name(Name, N),
+     io_lib:format("(Tags = #{<<\"~s\">> := {_V1, _},"
+                   " <<\"~s\">> := {_V2, _}}, Acc) "
+                   "when _V1 ~s ~s, "
+                   " _V2 ~s ~s ->\n",
+                   [Key1, Key2, Cmp1, format_v(V1), Cmp2, format_v(V2)]),
+     "  ", Body, ";\n",
+     rule_name(Name, N), "(Tags, Acc) ->\n",
+     "   ", rule_name(NextRule), "(Tags, Acc).\n",
+     render_clauses(Name, R1, NextRule, N + 1)];
+
+render_clauses(Name, [{{Cmp, Key, V}, continue} | R], NextRule, N) ->
+    {Body, R1} = continue_body(R, Name, N, NextRule),
+    [rule_name(Name, N),
+     io_lib:format("(Tags = #{<<\"~s\">> := {_V, _}}, Acc) when _V ~s ~s ->\n",
+                   [Key, Cmp, format_v(V)]),
+     "  ", Body, ";\n",
+     rule_name(Name, N), "(Tags, Acc) ->\n",
+     "   ", rule_name(NextRule), "(Tags, Acc).\n",
+     render_clauses(Name, R1, NextRule, N + 1)];
+
+render_clauses(Name, [{{Cmp, Key, V}, Action} | R], NextRule, N) ->
+    [rule_name(Name, N),
+     io_lib:format("(Tags = #{<<\"~s\">> := {V, _}}, Acc) when V ~s ~s ->\n",
+                   [Key, Cmp, format_v(V)]),
+     "  ", render_action(Action, Name, N, NextRule), ";\n",
+     rule_name(Name, N), "(Tags, Acc) ->\n",
+     "  ", rule_name(Name, N+1), "(Tags, Acc).\n",
+     render_clauses(Name, R, NextRule, N + 1)];
+
+render_clauses(Name, [{undefined, Action} | R], NextRule, N) ->
+    [rule_name(Name, N), "(Tags, Acc) ->\n"
+     "  ", render_action(Action, Name, N, NextRule), ".\n",
+     render_clauses(Name, R, NextRule, N + 1)];
+
+
+
 render_clauses(Name, [Check | R], NextRule, N) ->
     [rule_name(Name, N), "(Tags, Acc) ->\n",
      make_check(Check, Name, N, NextRule),
@@ -96,28 +157,7 @@ render_clauses(Name, [Check | R], NextRule, N) ->
 
 
 make_check({undefined, Action}, Name, N, NextRule)  ->
-    ["    ", render_action(Action, Name, N, NextRule), ".\n"];
-make_check({{exists, Key}, Action}, Name, N, NextRule)  ->
-    [io_lib:format("  case maps:find(<<\"~s\">>, Tags) of\n", [Key]),
-     "    {ok, _V} ->\n",
-     "      ", render_action(Action, Name, N, NextRule), ";\n",
-     "    _ ->\n",
-     "      ", rule_name(Name, N+1), "(Tags, Acc)\n",
-     "  end.\n"];
-make_check({{Cmp, Key, V}, continue}, Name, N, NextRule)  ->
-    [io_lib:format("  case maps:find(<<\"~s\">>, Tags) of\n", [Key]),
-     io_lib:format("    {ok, {V, _}} when V ~s ~s ->\n", [Cmp, format_v(V)]),
-     "      ", rule_name(Name, N+1), "(Tags, Acc);\n",
-     "    _ ->\n",
-     "      ", rule_name(NextRule), "(Tags, Acc)\n",
-     "  end.\n"];
-make_check({{Cmp, Key, V}, Action}, Name, N, NextRule)  ->
-    [io_lib:format("  case maps:find(<<\"~s\">>, Tags) of\n", [Key]),
-     io_lib:format("    {ok, {V, _}} when V ~s ~s ->\n", [Cmp, format_v(V)]),
-     "      ", render_action(Action, Name, N, NextRule), ";\n",
-     "    _ ->\n",
-     "      ", rule_name(Name, N+1), "(Tags, Acc)\n",
-     "  end.\n"].
+    ["    ", render_action(Action, Name, N, NextRule), ".\n"].
 
 render_action(drop, _Name, _N, _NextRule) ->
     "{ok, Acc}";
@@ -146,3 +186,10 @@ format_v(V) when is_integer(V) ->
 format_v(V) ->
     ["<<\"", V, "\">>"].
 
+
+%% If a continue is followed by a always matching clause
+%% We also pull the clause in
+continue_body([{undefined, Action}| R], Name, N, NextRule) ->
+    {render_action(Action, Name, N, NextRule), R};
+continue_body(R, Name, N, _NextRule) ->
+    {rule_name(Name, N+1), "(Tags, Acc)", R}.
