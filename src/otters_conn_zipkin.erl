@@ -28,12 +28,12 @@
 -compile(export_all).
 -include("otters.hrl").
 
--define(T_i16,     6).
--define(T_i32,     8).
--define(T_i64,    10).
--define(T_string, 11).
--define(T_struct, 12).
--define(T_list, 15).
+-define(T_I16,     6).
+-define(T_I32,     8).
+-define(T_I64,    10).
+-define(T_STRING, 11).
+-define(T_STRUCT, 12).
+-define(T_LIST,   15).
 
 sup_init() ->
     [
@@ -124,7 +124,7 @@ encode_spans(Spans) ->
                                       false),
     AddDfltToTag = otters_config:read(zipkin_add_default_service_to_tags,
                                       false),
-    DfltSrv = <<?T_struct, 4:16, (host_to_struct(default))/binary>>,
+    DfltSrv = <<?T_STRUCT, 4:16, (host_to_struct(default))/binary>>,
     UndefSrvLog = case AddDfltToLog of
                       true ->
                           DfltSrv;
@@ -138,7 +138,7 @@ encode_spans(Spans) ->
                            <<>>
                    end,
     DfltTag = otters_config:read(zipkin_add_host_tag_to_span, undefined),
-    <<?T_struct, Size:32,
+    <<?T_STRUCT, Size:32,
       << << (span_to_struct(S, DfltTag, DfltSrv,
                             UndefSrvLog, UndefSrvTag))/binary >>
          || S <- Spans>>/binary>>.
@@ -172,7 +172,7 @@ span_to_struct(#span{
                    undefined ->
                        <<>>;
                    ParentId ->
-                       <<?T_i64, 5:16, ParentId:64/signed-integer>>
+                       <<?T_I64, 5:16, ParentId:64/signed-integer>>
                end,
     LogsBin = << <<(log_to_annotation(Log, DfltSrv, UndefSrvLog))/binary>>
                  || Log <- Logs >>,
@@ -181,17 +181,17 @@ span_to_struct(#span{
            || Tag <- FinalTags >>,
     <<
       %% Header
-      ?T_i64,    1:16, TraceId:64/signed-integer,
-      ?T_string, 3:16, (byte_size(NameBin)):32, NameBin/binary,
-      ?T_i64,    4:16, Id:64/signed-integer,
+      ?T_I64,    1:16, TraceId:64/signed-integer,
+      ?T_STRING, 3:16, (byte_size(NameBin)):32, NameBin/binary,
+      ?T_I64,    4:16, Id:64/signed-integer,
       ParentBin/binary,
       %% Logs
-      ?T_list,   6:16, ?T_struct, LogSize:32, LogsBin/bytes,
+      ?T_LIST,   6:16, ?T_STRUCT, LogSize:32, LogsBin/bytes,
       %% Tags
-      ?T_list,   8:16, ?T_struct, TagSize:32, TagsBin/bytes,
+      ?T_LIST,   8:16, ?T_STRUCT, TagSize:32, TagsBin/bytes,
       %% Tail
-      ?T_i64,   10:16, Timestamp:64/signed-integer,
-      ?T_i64,   11:16, Duration:64/signed-integer,
+      ?T_I64,   10:16, Timestamp:64/signed-integer,
+      ?T_I64,   11:16, Duration:64/signed-integer,
       0
     >>.
 
@@ -201,7 +201,7 @@ service_to_bin(default, _, DfltSrv, _UndefServ) ->
     DfltSrv;
 service_to_bin(Service, ID, _DfltSrv, _UndefServ) ->
     HostBin = host_to_struct(Service),
-    <<?T_struct, ID:16, HostBin/binary>>.
+    <<?T_STRUCT, ID:16, HostBin/binary>>.
 
 log_to_annotation({Timestamp, Text}, DfltSrv, UndefSrv) ->
     log_to_annotation({Timestamp, Text, undefined}, DfltSrv, UndefSrv);
@@ -209,8 +209,8 @@ log_to_annotation({Timestamp, Text}, DfltSrv, UndefSrv) ->
 log_to_annotation({Timestamp, Text, Service}, DfltSrv, UndefSrv) ->
     TextBin = otters_lib:to_bin(Text),
     SrvBin = service_to_bin(Service, 3, DfltSrv, UndefSrv),
-    <<?T_i64,    1:16, Timestamp:64/signed-integer,
-      ?T_string, 2:16, (byte_size(TextBin)):32, TextBin/binary,
+    <<?T_I64,    1:16, Timestamp:64/signed-integer,
+      ?T_STRING, 2:16, (byte_size(TextBin)):32, TextBin/binary,
       SrvBin/binary,
       0>>.
 
@@ -218,9 +218,9 @@ tag_to_binary_annotation({Key, {Value, Service}}, DfltSrv, UndefServ)
   when is_binary(Key) ->
     ValueBin = otters_lib:to_bin(Value),
     SrvBin = service_to_bin(Service, 4, DfltSrv, UndefServ),
-    <<?T_string, 1:16, (byte_size(Key)):32, Key/binary,
-      ?T_string, 2:16, (byte_size(ValueBin)):32, ValueBin/binary,
-      ?T_i32,    3:16, 6:32/signed-integer,
+    <<?T_STRING, 1:16, (byte_size(Key)):32, Key/binary,
+      ?T_STRING, 2:16, (byte_size(ValueBin)):32, ValueBin/binary,
+      ?T_I32,    3:16, 6:32/signed-integer,
       SrvBin/binary,
       0>>;
 
@@ -245,9 +245,9 @@ host_to_struct(Service)
                    });
 host_to_struct({Service, Ip, Port}) ->
     IPInt = otters_lib:ip_to_i32(Ip),
-    <<?T_i32,    1:16, IPInt:32/signed-integer,
-      ?T_i16,    2:16, Port:16/signed-integer,
-      ?T_string, 3:16, (byte_size(Service)):32, Service/binary,
+    <<?T_I32,    1:16, IPInt:32/signed-integer,
+      ?T_I16,    2:16, Port:16/signed-integer,
+      ?T_STRING, 3:16, (byte_size(Service)):32, Service/binary,
       0>>.
 
 struct_to_span(StructData) ->
@@ -400,22 +400,22 @@ decode_list(ElementType, Size, Elements, Acc) ->
 map_type(2)     -> bool;
 map_type(3)     -> byte;
 map_type(4)     -> double;
-map_type(?T_i16)    -> i16;
-map_type(?T_i32)    -> i32;
-map_type(?T_i64)    -> i64;
-map_type(?T_string) -> string;
-map_type(?T_struct) -> struct;
+map_type(?T_I16)    -> i16;
+map_type(?T_I32)    -> i32;
+map_type(?T_I64)    -> i64;
+map_type(?T_STRING) -> string;
+map_type(?T_STRUCT) -> struct;
 map_type(13)    -> map;
 map_type(14)    -> set;
-map_type(?T_list)   -> list;
+map_type(?T_LIST)   -> list;
 map_type(bool)  -> 2;
 map_type(byte)  -> 3;
 map_type(double)-> 4;
-map_type(i16)   -> ?T_i16;
-map_type(i32)   -> ?T_i32;
-map_type(i64)   -> ?T_i64;
-map_type(string)-> ?T_string;
-map_type(struct)-> ?T_struct;
+map_type(i16)   -> ?T_I16;
+map_type(i32)   -> ?T_I32;
+map_type(i64)   -> ?T_I64;
+map_type(string)-> ?T_STRING;
+map_type(struct)-> ?T_STRUCT;
 map_type(map)   -> 13;
 map_type(set)   -> 14;
-map_type(list)  -> ?T_list.
+map_type(list)  -> ?T_LIST.

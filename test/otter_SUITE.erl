@@ -9,7 +9,8 @@ all() ->
 
 ptest(_Config) ->
     application:ensure_all_started(otters),
-    application:set_env(otters, zipkin_collector_uri, "http://127.0.0.1:19411/api/v1/spans"),
+    application:set_env(otters, zipkin_collector_uri,
+                        "http://127.0.0.1:19411/api/v1/spans"),
 
     meck:new(ibrowse, [passthrough]),
     meck:expect(ibrowse, send_req, fun send_req/4),
@@ -25,7 +26,8 @@ ptest(_Config) ->
 
 ftest(_Config) ->
     application:ensure_all_started(otters),
-    application:set_env(otters, zipkin_collector_uri, "http://127.0.0.1:19411/api/v1/spans"),
+    application:set_env(otters, zipkin_collector_uri,
+                        "http://127.0.0.1:19411/api/v1/spans"),
     application:set_env(otters, server_zipkin_callback, {?MODULE, handle_span}),
     ets:new(test_span_collector, [named_table, public, {keypos, 2}]),
 
@@ -38,8 +40,9 @@ ftest(_Config) ->
     S4 = otters:log(S3, "α =:= ω"),
     S5 = otters:log(S4, 123456),
     S6 = otters:log(S5, 'this is a atom'),
-    S7 = otters:log(S6, io_lib:format("int: ~w, float: ~f, hex: ~.16B, Span: ~p",
-					  [1, 1.0, 1, S6])),
+    S7 = otters:log(S6,
+                    io_lib:format("int: ~w, float: ~f, hex: ~.16B, Span: ~p",
+                                  [1, 1.0, 1, S6])),
     S8 = otters:log(S7, S7),
     S9 = otters:log(S8, fun() -> "result of function" end),
     otters:finish(S9),

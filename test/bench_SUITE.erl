@@ -267,8 +267,10 @@ run(Fn) ->
                 end,
     meck:unload(otters_conn_zipkin),
     meck:unload(otters_snapshot_count),
-    io:format(user, "~.2f microseconds / span.~n", [T / (Count * length(Spans))]),
-    io:format(user, "  Logged a total of ~p spans.~n", [LogCount + LogLongCount]),
+    io:format(user, "~.2f microseconds / span.~n",
+              [T / (Count * length(Spans))]),
+    io:format(user, "  Logged a total of ~p spans.~n",
+              [LogCount + LogLongCount]),
     io:format(user, "  Send a total of ~p spans.~n", [SendCount]),
     %% We log 2 out of 3 messages so we need to multiply this
     %% by 2

@@ -7,7 +7,6 @@ compile(S) ->
     {ok, Rs} = of_parser:parse(T),
     {ok, Cs} = group_rules(Rs),
     Rendered = render(Cs),
-    io:format("~s~n", [Rendered]),
     application:set_env(otters, filter_string, S),
     dynamic_compile:load_from_string(lists:flatten(Rendered)).
 
