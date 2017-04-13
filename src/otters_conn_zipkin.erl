@@ -113,7 +113,6 @@ send_spans_http(httpc, ZipkinURL, Data) ->
 
 encode_spans(Spans) ->
     Data = {struct, [span_to_struct(S) || S <- Spans]},
-    %%io:format("Data: ~p~n", [Data]),
     encode_implicit_list(Data).
 
 decode_spans(Data) ->
@@ -311,6 +310,8 @@ encode({Id, Type, Data}) ->
     EData = encode({Type, Data}),
     <<TypeId, Id:16, EData/bytes>>;
 %% .. and without Id (i.e. part of list/set/map)
+encode({raw, B}) ->
+    B;
 encode({bool, true}) ->
     <<1>>;
 encode({bool, false}) ->
@@ -339,27 +340,22 @@ encode({string, Val}) when is_binary(Val) ->
 encode({list, {ElementType, Data}}) ->
     ElementTypeId = map_type(ElementType),
     Size = length(Data),
-    EData = list_to_binary([
-                            encode({ElementType, Element}) ||
-                               Element <- Data
-                           ]),
+    EData = << <<(encode({ElementType, Element}))/binary>> || Element <- Data>>,
     <<ElementTypeId, Size:32, EData/bytes>>;
 encode({set, Data}) ->
     encode({list, Data});
 encode({struct, Data}) ->
-    EData = list_to_binary([
-                            encode(StructElement) ||
-                               StructElement <- Data
-                           ]),
+    EData = << <<(encode(StructElement))/binary>> || StructElement <- Data >>,
     <<EData/bytes, 0>>;
 encode({map, {KeyType, ValType, Data}}) ->
     KeyTypeId = map_type(KeyType),
     ValTypeId = map_type(ValType),
     Size = length(Data),
-    EData = list_to_binary([
-                            [encode({KeyType, Key}), encode({ValType, Val})] ||
-                               {Key, Val} <- Data
-                           ]),
+    EData = <<
+              <<(encode({KeyType, Key}))/binary,
+                (encode({ValType, Val}))/binary>>  ||
+                {Key, Val} <- Data
+            >>,
     <<KeyTypeId, ValTypeId, Size:32, EData/bytes>>.
 
 %% Decoding functions
