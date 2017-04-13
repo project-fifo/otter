@@ -21,25 +21,25 @@
     {zipkin_add_default_service_to_tags, false},
 
 
-    {zipkin_add_host_tag_to_span, {"lc", ""}},
+    {zipkin_add_host_tag_to_span, {"lc", ""}}%,
 
-    {filter_rules, [
-        {
-            [
-                {greater, otter_span_duration, 1000}
-            ],
-            [
-                {snapshot_count, [long_span], [otter_span_name]}
-            ]
-        },
-        {
-            [],
-            [
-                {snapshot_count, [span_processed], [otter_span_name]},
-                send_to_zipkin
-            ]
-        }
-    ]}
+    %% {filter_rules, [
+    %%     {
+    %%         [
+    %%             {greater, otter_span_duration, 1000}
+    %%         ],
+    %%         [
+    %%             {snapshot_count, [long_span], [otter_span_name]}
+    %%         ]
+    %%     },
+    %%     {
+    %%         [],
+    %%         [
+    %%             {snapshot_count, [span_processed], [otter_span_name]},
+    %%             send_to_zipkin
+    %%         ]
+    %%     }
+    %% ]}
   ]},
   {modules, []},
   {maintainers, ["Heinz N. Gies"]},

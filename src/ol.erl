@@ -20,6 +20,10 @@ check(Tags, Span) ->
     {ok, Actions} =  ol_filter:check(Tags),
     perform(Actions, Span).
 
+%% Since dialyzer will arn that the 'dummy'/empty implementation
+%% of ol_filter can't ever match send or cout we have to ignore
+%% this function
+-dialyzer({nowarn_function, perform/2}).
 perform([], _Span) ->
     ok;
 perform([send | Rest], Span) ->
@@ -146,18 +150,7 @@ render_clauses(Name, [{{Cmp, Key, V}, Action} | R], NextRule, N) ->
 render_clauses(Name, [{undefined, Action} | R], NextRule, N) ->
     [rule_name(Name, N), "(Tags, Acc) ->\n"
      "  ", render_action(Action, Name, N, NextRule), ".\n",
-     render_clauses(Name, R, NextRule, N + 1)];
-
-
-
-render_clauses(Name, [Check | R], NextRule, N) ->
-    [rule_name(Name, N), "(Tags, Acc) ->\n",
-     make_check(Check, Name, N, NextRule),
      render_clauses(Name, R, NextRule, N + 1)].
-
-
-make_check({undefined, Action}, Name, N, NextRule)  ->
-    ["    ", render_action(Action, Name, N, NextRule), ".\n"].
 
 render_action(drop, _Name, _N, _NextRule) ->
     "{ok, Acc}";
