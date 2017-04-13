@@ -28,6 +28,12 @@
 -compile(export_all).
 -include("otters.hrl").
 
+-define(T_i16,     6).
+-define(T_i32,     8).
+-define(T_i64,    10).
+-define(T_string, 11).
+-define(T_struct, 12).
+
 sup_init() ->
     [
      ets:new(
@@ -166,36 +172,46 @@ log_to_annotation({Timestamp, Text}) ->
         true ->
             log_to_annotation({Timestamp, Text, default});
         false ->
-            [
-             {1, i64, Timestamp},
-             {2, string, otters_lib:to_bin(Text)}
-            ]
+            TextBin = otters_lib:to_bin(Text),
+            <<?T_i64, 1:16, Timestamp:64/signed-integer,
+              ?T_string, 2:16, (byte_size(TextBin)):32, TextBin/binary,
+              0>>
     end;
 log_to_annotation({Timestamp, Text, Service}) ->
-    [
-     {1, i64, Timestamp},
-     {2, string, otters_lib:to_bin(Text)},
-     {3, struct, host_to_struct(Service)}
-    ].
+    TextBin = otters_lib:to_bin(Text),
+    HostBin = host_to_struct(Service),
+    <<?T_i64,    1:16, Timestamp:64/signed-integer,
+      ?T_string, 2:16, (byte_size(TextBin)):32, TextBin/binary,
+      ?T_struct, 3:16, HostBin/binary,
+      0>>.
+
+    %% encode({struct, [
+    %%                 {1, i64, Timestamp},
+    %%                 {2, string, otters_lib:to_bin(Text)},
+    %%                 {3, struct, host_to_struct(Service)}
+    %%                ]}).
 
 tag_to_binary_annotation({Key, {Value, undefined}}) ->
     case otters_config:read(zipkin_add_default_service_to_tags, false) of
         true ->
             tag_to_binary_annotation({Key, {Value, default}});
         false ->
-            [
-             {1, string, otters_lib:to_bin(Key)},
-             {2, string, otters_lib:to_bin(Value)},
-             {3, i32, 6}
-            ]
+            ValueBin = otters_lib:to_bin(Value),
+            <<?T_string, 1:16, (byte_size(Key)):32, Key/binary,
+              ?T_string, 2:16, (byte_size(ValueBin)):32, ValueBin/binary,
+              ?T_i32,    3:16, 6:32/signed-integer, 0>>
     end;
+tag_to_binary_annotation({Key, {Value, Service}}) when is_binary(Key) ->
+    ValueBin = otters_lib:to_bin(Value),
+    HostBin = host_to_struct(Service),
+    <<?T_string, 1:16, (byte_size(Key)):32, Key/binary,
+      ?T_string, 2:16, (byte_size(ValueBin)):32, ValueBin/binary,
+      ?T_i32,    3:16, 6:32/signed-integer,
+      ?T_struct, 4:16, HostBin/binary,
+      0>>;
+
 tag_to_binary_annotation({Key, {Value, Service}}) ->
-    [
-     {1, string, otters_lib:to_bin(Key)},
-     {2, string, otters_lib:to_bin(Value)},
-     {3, i32, 6},
-     {4, struct, host_to_struct(Service)}
-    ].
+    tag_to_binary_annotation({otters_lib:to_bin(Key), {Value, Service}}).
 
 host_to_struct(default) ->
     DefaultService = otters_config:read(
@@ -213,11 +229,16 @@ host_to_struct(Service)
                      otters_config:read(zipkin_tag_host_port, 0)
                    });
 host_to_struct({Service, Ip, Port}) ->
-    [
-     {1, i32, otters_lib:ip_to_i32(Ip)},
-     {2, i16, Port},
-     {3, string, Service}
-    ].
+    IPInt = otters_lib:ip_to_i32(Ip),
+    <<?T_i32,    1:16, IPInt:32/signed-integer,
+      ?T_i16,    2:16, Port:16/signed-integer,
+      ?T_string, 3:16, (byte_size(Service)):32, Service/binary,
+      0>>.
+    %% [
+    %%  {1, i32, otters_lib:ip_to_i32(Ip)},
+    %%  {2, i16, Port},
+    %%  {3, string, Service}
+    %% ].
 
 struct_to_span(StructData) ->
     struct_to_span(StructData, #span{}).
@@ -344,6 +365,9 @@ encode({list, {ElementType, Data}}) ->
     <<ElementTypeId, Size:32, EData/bytes>>;
 encode({set, Data}) ->
     encode({list, Data});
+%% If we have a struct w/ binary data this is pre-encoded
+encode({struct, Data}) when is_binary(Data) ->
+    Data;
 encode({struct, Data}) ->
     EData = << <<(encode(StructElement))/binary>> || StructElement <- Data >>,
     <<EData/bytes, 0>>;
@@ -426,22 +450,22 @@ decode_list(ElementType, Size, Elements, Acc) ->
 map_type(2)     -> bool;
 map_type(3)     -> byte;
 map_type(4)     -> double;
-map_type(6)     -> i16;
-map_type(8)     -> i32;
-map_type(10)    -> i64;
-map_type(11)    -> string;
-map_type(12)    -> struct;
+map_type(?T_i16)    -> i16;
+map_type(?T_i32)    -> i32;
+map_type(?T_i64)    -> i64;
+map_type(?T_string) -> string;
+map_type(?T_struct) -> struct;
 map_type(13)    -> map;
 map_type(14)    -> set;
 map_type(15)    -> list;
 map_type(bool)  -> 2;
 map_type(byte)  -> 3;
 map_type(double)-> 4;
-map_type(i16)   -> 6;
-map_type(i32)   -> 8;
-map_type(i64)   -> 10;
-map_type(string)-> 11;
-map_type(struct)-> 12;
+map_type(i16)   -> ?T_i16;
+map_type(i32)   -> ?T_i32;
+map_type(i64)   -> ?T_i64;
+map_type(string)-> ?T_string;
+map_type(struct)-> ?T_struct;
 map_type(map)   -> 13;
 map_type(set)   -> 14;
 map_type(list)  -> 15.
