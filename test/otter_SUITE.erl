@@ -2,7 +2,7 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([all/0, ptest/1, ftest/1, handle_span/1]).
+-export([all/0, ptest/1, ftest/1]).
 
 all() ->
     [ftest, ptest].

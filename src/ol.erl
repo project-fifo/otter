@@ -7,9 +7,11 @@ compile(S) ->
     {ok, Cs} = group_rules(Rs),
     Rendered = render(Cs),
     io:format("~s~n", [Rendered]),
+    application:set_env(otters, filter_string, S),
     dynamic_compile:load_from_string(lists:flatten(Rendered)).
 
 clear() ->
+    application:set_env(otters, filter_string, undefined),
     code:purge(ol_filter),
     code:delete(ol_filter).
 
@@ -58,7 +60,7 @@ render(Cs) ->
      "get_tag(Key, Tags) ->\n",
      "  KeyBin = otters_lib:to_bin(Key),\n",
      "  case maps:find(KeyBin, Tags) of\n",
-     "    {ok, V} -> V;\n",
+     "    {ok, {V, _}} -> V;\n",
      "    _ -> <<>>\n",
      "  end.\n",
      "\n",
@@ -104,14 +106,14 @@ make_check({{exists, Key}, Action}, Name, N, NextRule)  ->
      "  end.\n"];
 make_check({{Cmp, Key, V}, continue}, Name, N, NextRule)  ->
     [io_lib:format("  case maps:find(<<\"~s\">>, Tags) of\n", [Key]),
-     io_lib:format("    {ok, V} when V ~s ~s ->\n", [Cmp, format_v(V)]),
+     io_lib:format("    {ok, {V, _}} when V ~s ~s ->\n", [Cmp, format_v(V)]),
      "      ", rule_name(Name, N+1), "(Tags, Acc);\n",
      "    _ ->\n",
      "      ", rule_name(NextRule), "(Tags, Acc)\n",
      "  end.\n"];
 make_check({{Cmp, Key, V}, Action}, Name, N, NextRule)  ->
     [io_lib:format("  case maps:find(<<\"~s\">>, Tags) of\n", [Key]),
-     io_lib:format("    {ok, V} when V ~s ~s ->\n", [Cmp, format_v(V)]),
+     io_lib:format("    {ok, {V, _}} when V ~s ~s ->\n", [Cmp, format_v(V)]),
      "      ", render_action(Action, Name, N, NextRule), ";\n",
      "    _ ->\n",
      "      ", rule_name(Name, N+1), "(Tags, Acc)\n",

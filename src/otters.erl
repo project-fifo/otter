@@ -135,7 +135,7 @@ tag(Span, Key, Value, Service)
   when is_record(Span, span) ->
     KeyBin = otters_lib:to_bin(Key),
     Span#span{
-      tags = maps:put(KeyBin, {Value, Service}, Span#span.tags)
+      tags = maps:put(KeyBin, {v(Value), Service}, Span#span.tags)
      }.
 
 %%--------------------------------------------------------------------
@@ -150,7 +150,7 @@ log(Span, Text)
   when is_record(Span, span) ->
     Logs = Span#span.logs,
     Span#span{
-      logs = [{otters_lib:timestamp(), Text} | Logs]
+      logs = [{otters_lib:timestamp(), otters_lib:to_bin(Text)} | Logs]
      }.
 
 %%--------------------------------------------------------------------
@@ -166,7 +166,7 @@ log(Span, Text, Service)
   when is_record(Span, span) ->
     Logs = Span#span.logs,
     Span#span{
-      logs = [{otters_lib:timestamp(), Text, Service} | Logs]
+      logs = [{otters_lib:timestamp(), otters_lib:to_bin(Text), Service} | Logs]
      }.
 
 %%--------------------------------------------------------------------
@@ -202,29 +202,11 @@ ids(Span)
     #span{trace_id = TraceId, id = Id} = Span,
     {TraceId, Id}.
 
-%% ========================  Snap/Count API  =========================
-%% When span_end/1 or span_pend/0 is called then the completed span is
-%% passed to a configurable filter. The filter can check the Span tags
-%% as well as the name and duration of the span and use the information
-%% to decide to send the Span to the trace collector (Zipkin supported)
-%% and/or increase counters based on values of the tags and store the
-%% last Span for the counters. This latter is particularly useful for
-%% troubleshooting e.g. error events when increase of the corresponding
-%% counter is noticed. These snapshots (referred as Snap) and counters
-%% can be retrieved, managed with this API
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
-%% -spec counter_list() -> [{list(), integer()}].
-%% counter_list() ->
-%%     otters_snapshot_count:list_counts().
-
-%% -spec counter_snapshot(list()) -> term().
-%% counter_snapshot(Key) ->
-%%     otters_snapshot_count:get_snap(Key).
-
-%% -spec counter_delete(list()) -> ok.
-%% counter_delete(Key) ->
-%%     otters_snapshot_count:delete_counter(Key).
-
-%% -spec counter_delete_all() -> ok.
-%% counter_delete_all() ->
-%%     otters_snapshot_count:delete_all_counters().
+v(I) when is_integer(I) ->
+    I;
+v(O) ->
+    otters_lib:to_bin(O).

@@ -61,14 +61,14 @@
 span(#span{tags = Tags, name = Name, duration = Duration} = Span) ->
     Rules = otters_config:read(filter_rules, []),
     Tags1 = Tags#{
-              <<"otters_span_name">> => {Name, undefined},
+              <<"otters_span_name">>     => {Name, undefined},
               <<"otters_span_duration">> => {Duration, undefined}
              },
-    case erlang:function_exported(ol_filter, check, 2) of
-        false ->
+    case application:get_env(otters, filter_string, undefined) of
+        undefined ->
             rules(Rules, Tags1, Span);
-        true ->
-            ol_filter:check(Span, Tags1)
+        _ ->
+            ol:check(Tags1, Span)
     end.
 
 -spec rules([filter()], otter:tags(), otter:span()) ->
