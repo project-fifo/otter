@@ -1,6 +1,6 @@
 -module(ol_filter).
 
--export([check/1]).
+-export([check/3]).
 
-check(_) ->
+check(_, _, _) ->
     {ok, []}.
