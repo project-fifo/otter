@@ -124,9 +124,24 @@ encode_spans(Spans) ->
                                       false),
     AddDfltToTag = otters_config:read(zipkin_add_default_service_to_tags,
                                       false),
+    DfltSrv = <<?T_struct, 4:16, (host_to_struct(default))/binary>>,
+    UndefSrvLog = case AddDfltToLog of
+                      true ->
+                          DfltSrv;
+                      _ ->
+                           <<>>
+                   end,
+    UndefSrvTag = case AddDfltToTag of
+                       true ->
+                          DfltSrv;
+                       _ ->
+                           <<>>
+                   end,
+    DfltTag = otters_config:read(zipkin_add_host_tag_to_span, undefined),
     <<?T_struct, Size:32,
-      << << (span_to_struct(S, AddDfltToLog, AddDfltToTag))/binary >>
-         || S <- Spans>>/bytes>>.
+      << << (span_to_struct(S, DfltTag, DfltSrv,
+                            UndefSrvLog, UndefSrvTag))/binary >>
+         || S <- Spans>>/binary>>.
 
 
 decode_spans(Data) ->
@@ -142,15 +157,14 @@ span_to_struct(#span{
                   tags = TagsM,
                   timestamp = Timestamp,
                   duration = Duration
-                 }, AddDfltToLog, AddDfltToTag) ->
+                 }, DfltTag, DfltSrv, UndefSrvLog, UndefSrvTag) ->
     Tags = maps:to_list(TagsM),
-    FinalTags =
-        case otters_config:read(zipkin_add_host_tag_to_span, undefined) of
-            {Key, Value} ->
-                [{Key, {Value, default}} | Tags];
-            _ ->
-                Tags
-        end,
+    FinalTags = case DfltTag of
+                    {Key, Value} ->
+                        [{Key, {Value, default}} | Tags];
+                    _ ->
+                        Tags
+                end,
     LogSize = length(Logs),
     TagSize = length(FinalTags),
     NameBin = otters_lib:to_bin(Name),
@@ -160,10 +174,11 @@ span_to_struct(#span{
                    ParentId ->
                        <<?T_i64, 5:16, ParentId:64/signed-integer>>
                end,
-    LogsBin = << <<(log_to_annotation(Log, AddDfltToLog))/binary>>
+    LogsBin = << <<(log_to_annotation(Log, DfltSrv, UndefSrvLog))/binary>>
                  || Log <- Logs >>,
-    TagsBin = << <<(tag_to_binary_annotation(Tag, AddDfltToTag))/binary>>
-                 || Tag <- FinalTags >>,
+    TagsBin =
+        << <<(tag_to_binary_annotation(Tag, DfltSrv, UndefSrvTag))/binary>>
+           || Tag <- FinalTags >>,
     <<
       %% Header
       ?T_i64,    1:16, TraceId:64/signed-integer,
@@ -180,45 +195,38 @@ span_to_struct(#span{
       0
     >>.
 
-log_to_annotation({Timestamp, Text}, AddDfltToLog) ->
-    case AddDfltToLog of
-        true ->
-            log_to_annotation({Timestamp, Text, default}, AddDfltToLog);
-        false ->
-            TextBin = otters_lib:to_bin(Text),
-            <<?T_i64, 1:16, Timestamp:64/signed-integer,
-              ?T_string, 2:16, (byte_size(TextBin)):32, TextBin/binary,
-              0>>
-    end;
-log_to_annotation({Timestamp, Text, Service}, _AddDfltToLog) ->
-    TextBin = otters_lib:to_bin(Text),
+service_to_bin(undefined, _, _DfltSrv, UndefServ) ->
+    UndefServ;
+service_to_bin(default, _, DfltSrv, _UndefServ) ->
+    DfltSrv;
+service_to_bin(Service, ID, _DfltSrv, _UndefServ) ->
     HostBin = host_to_struct(Service),
+    <<?T_struct, ID:16, HostBin/binary>>.
+
+log_to_annotation({Timestamp, Text}, DfltSrv, UndefSrv) ->
+    log_to_annotation({Timestamp, Text, undefined}, DfltSrv, UndefSrv);
+
+log_to_annotation({Timestamp, Text, Service}, DfltSrv, UndefSrv) ->
+    TextBin = otters_lib:to_bin(Text),
+    SrvBin = service_to_bin(Service, 3, DfltSrv, UndefSrv),
     <<?T_i64,    1:16, Timestamp:64/signed-integer,
       ?T_string, 2:16, (byte_size(TextBin)):32, TextBin/binary,
-      ?T_struct, 3:16, HostBin/binary,
+      SrvBin/binary,
       0>>.
 
-tag_to_binary_annotation({Key, {Value, undefined}}, UseDefault) ->
-    case UseDefault of
-        true ->
-            tag_to_binary_annotation({Key, {Value, default}}, UseDefault);
-        false ->
-            ValueBin = otters_lib:to_bin(Value),
-            <<?T_string, 1:16, (byte_size(Key)):32, Key/binary,
-              ?T_string, 2:16, (byte_size(ValueBin)):32, ValueBin/binary,
-              ?T_i32,    3:16, 6:32/signed-integer, 0>>
-    end;
-tag_to_binary_annotation({Key, {Value, Service}}, _) when is_binary(Key) ->
+tag_to_binary_annotation({Key, {Value, Service}}, DfltSrv, UndefServ)
+  when is_binary(Key) ->
     ValueBin = otters_lib:to_bin(Value),
-    HostBin = host_to_struct(Service),
+    SrvBin = service_to_bin(Service, 4, DfltSrv, UndefServ),
     <<?T_string, 1:16, (byte_size(Key)):32, Key/binary,
       ?T_string, 2:16, (byte_size(ValueBin)):32, ValueBin/binary,
       ?T_i32,    3:16, 6:32/signed-integer,
-      ?T_struct, 4:16, HostBin/binary,
+      SrvBin/binary,
       0>>;
 
-tag_to_binary_annotation({Key, {Value, Service}}, UseDefault) ->
-    tag_to_binary_annotation({otters_lib:to_bin(Key), {Value, Service}}, UseDefault).
+tag_to_binary_annotation({Key, {Value, Service}}, DfltSrv, UndefServ) ->
+    tag_to_binary_annotation({otters_lib:to_bin(Key), {Value, Service}},
+                             DfltSrv, UndefServ).
 
 host_to_struct(default) ->
     DefaultService = otters_config:read(

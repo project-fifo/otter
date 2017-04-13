@@ -72,11 +72,12 @@ prop_encode_decode() ->
                 Encoded = otters_conn_zipkin:encode_spans(Spans),
                 Decoded = otters_conn_zipkin:decode_spans(Encoded),
                 Cleaned = [cleanup(S) || S <- Decoded],
+                CleanedIn = [cleanup(S) || S <- Spans],
                 ?WHENFAIL(
                    io:format(user,
                              "~p -> ~p~n",
-                             [Spans, Cleaned]),
-                   Spans =:= Cleaned)
+                             [CleanedIn, Cleaned]),
+                   CleanedIn =:= Cleaned)
             end).
 
 cleanup(S = #span{
@@ -105,5 +106,7 @@ clean_log({T, V, {<<"otters_test">>, {127,0,0,1}, 0}}) ->
     {T, V, default};
 clean_log({T, V, {S, {127,0,0,1}, 0}}) ->
     {T, V, S};
+clean_log({T, V}) ->
+    {T, V, default};
 clean_log(O) ->
     O.
