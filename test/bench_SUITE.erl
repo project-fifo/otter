@@ -279,8 +279,8 @@ run(Fn) ->
     ?assertEqual(Count, SendCount).
 
 %%% Original
-%%% Encoding: 61.55 microseconds / span.
-%%% Decoding: 77.08 microseconds / span.
+%%% Encoding: 422.18 microseconds / span.
+%%% Decoding: 140.12 microseconds / span.
 %%% bench_SUITE ==> bench_encoding: OK
 bench_encoding(_) ->
     Count = 100000,
@@ -340,19 +340,21 @@ mk_span() ->
        name = <<"other request">>,
        tags = #{
          <<"1">> => {1, undefined},
-         <<"2">> => {1, undefined},
-         <<"3">> => {1, undefined},
+         <<"2">> => {<<"hello">>, undefined},
+         <<"3">> => {1, default},
          <<"4">> => {1, undefined},
-         <<"5">> => {1, undefined},
-         <<"6">> => {1, undefined},
+         <<"5">> => {<<"hello">>, default},
+         <<"6">> => {1, {<<"test">>, {127, 0, 0, 1}, 1}},
          <<"7">> => {1, undefined},
-         <<"8">> => {1, undefined},
-         <<"9">> => {1, undefined},
-         <<"10">> => {1, undefined}
+         <<"8">> => {<<"hello">>, undefined},
+         <<"9">> => {1, default},
+         <<"10">> => {1, {<<"test">>, {127, 0, 0, 1}, 1}}
         },
        logs = [
-               {1, <<"test">>},
-               {2, <<"bla">>},
-               {3, <<"blubber">>}
+               {1, <<"test">>, default},
+               {2, <<"bla">>, undefined},
+               {3, <<"blubber">>, default},
+               {4, <<"hello">>, {<<"test">>, {127, 0, 0, 1}, 1}},
+               {5, <<"world">>}
               ]
       }.
