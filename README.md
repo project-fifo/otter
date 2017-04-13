@@ -9,6 +9,12 @@ OpenTracing Toolkit for Erlang
 
 ![otter logo](docs/images/otter_logo.png)
 
+## Performance
+
+Instrumentation should have minimal impact on production code, so otters is tuned to be fast. So a few back of the envelop numbers (YMMV):
+
+- filtering a span (using the filter language): < 1 microsecond (~3-10x improvement)
+- encoding 1 spawn to be send: < 10 microseconds (~400x improvement)
 
 
 ## Build
