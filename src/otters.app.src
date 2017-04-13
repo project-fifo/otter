@@ -1,20 +1,48 @@
-{application,otters,
-    [{description,"OpenTracing Toolkit for Erlang"},
-     {vsn,"0.2.1"},
-     {registered,[otters_sup,otters_snapshot_count,otters_conn_zipkin]},
-     {mod,{otters_app,[]}},
-     {applications,[kernel,stdlib,ibrowse,dynamic_compile]},
-     {env,
-         [{http_client,ibrowse},
-          {zipkin_collector_uri,"http://127.0.0.1:9411/api/v1/spans"},
-          {zipkin_batch_interval_ms,100},
-          {zipkin_tag_host_ip,{127,0,0,1}},
-          {zipkin_tag_host_port,0},
-          {zipkin_tag_host_service,"otters_test"},
-          {zipkin_add_default_service_to_logs,false},
-          {zipkin_add_default_service_to_tags,false},
-          {zipkin_add_host_tag_to_span,{"lc",[]}}]},
-     {modules,[]},
-     {maintainers,["Heinz N. Gies"]},
-     {licenses,["Apache"]},
-     {links,[{"Github","https://github.com/project-fifo/otters"}]}]}.
+{application, otters,
+ [{description, "OpenTracing Toolkit for Erlang"},
+  {vsn, git},
+  {registered, [otters_sup, otters_snapshot_count, otters_conn_zipkin]},
+  {mod, { otters_app, []}},
+  {applications,
+   [kernel,
+    stdlib,
+    ibrowse,
+    dynamic_compile
+   ]},
+  {env,[
+    {http_client, ibrowse},
+    {zipkin_collector_uri, "http://127.0.0.1:9411/api/v1/spans"},
+    {zipkin_batch_interval_ms, 100},
+    {zipkin_tag_host_ip, {127,0,0,1}},
+    {zipkin_tag_host_port, 0},
+    {zipkin_tag_host_service, "otters_test"},
+
+    {zipkin_add_default_service_to_logs, false},
+    {zipkin_add_default_service_to_tags, false},
+
+
+    {zipkin_add_host_tag_to_span, {"lc", ""}}%,
+
+    %% {filter_rules, [
+    %%     {
+    %%         [
+    %%             {greater, otter_span_duration, 1000}
+    %%         ],
+    %%         [
+    %%             {snapshot_count, [long_span], [otter_span_name]}
+    %%         ]
+    %%     },
+    %%     {
+    %%         [],
+    %%         [
+    %%             {snapshot_count, [span_processed], [otter_span_name]},
+    %%             send_to_zipkin
+    %%         ]
+    %%     }
+    %% ]}
+  ]},
+  {modules, []},
+  {maintainers, ["Heinz N. Gies"]},
+  {licenses, ["Apache"]},
+  {links, [{"Github", "https://github.com/project-fifo/otters"}]}
+ ]}.
