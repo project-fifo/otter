@@ -1,3 +1,93 @@
+%%%-------------------------------------------------------------------
+%%% Copyright (c) 2017 Heinz N. Gies
+%%%
+%%% Permission is hereby granted, free of charge, to any person obtaining a copy
+%%% of this software and associated documentation files (the "Software"), to
+%%% deal in the Software without restriction, including without limitation the
+%%% rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+%%% sell copies of the Software, and to permit persons to whom the Software is
+%%% furnished to do so, subject to the following conditions:
+%%%
+%%% The above copyright notice and this permission notice shall be included in
+%%% all copies or substantial portions of the Software.</br>
+%%%
+%%% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+%%% IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+%%% FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+%%% AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+%%% LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING,
+%%% FROM OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+%%% IN THE SOFTWARE.
+%%%
+%%% @author Heinz N. Gies <heinz@project-fifo.net>
+%%% @copyright (C) 2017, Heinz N. Gies
+%%% @doc The ol module is the interface to the otters filter language
+%%% it deals with compiling and running compiled filters.
+%%%
+%%% The otters filter language is a high peroformance language build to
+%%% filter open traccing spans. It achives this by compiling directoy to
+%%% erlang code that can be run ontop of the erlang virutal machine instead
+%%% taking advantage of pattern matching, guards and other features that
+%%% are already implemented within the erlang vm.
+%%%
+%%% The language itself is loosely baed on erlang syntax, and works somewaht
+%%% like firewall rules. It comes with two main abstractions, the <em>rule</em>
+%%% and the <em>condition</em>, while rules are sets of one or more conditions.
+%%% During rule execution all tags can be accessed and compared against, as well
+%%% as the two special values <em>otters_span_duration</em> and
+%%% <em>otters_span_name</em> reflecting respectively the duration and the
+%%% name of the span.
+%%%
+%%% Rules are executed in order they are written, within the rules conditions
+%%% are also excuted within the order they're provided.
+%%%
+%%% Each rule can have a condition attached, which compares a tag with a value
+%%% values can be either strings or numbers. If the condition just is a field
+%%% the existence will be tested, if the condition is empty the condition is
+%%% always executed once it is reached.
+%%%
+%%% Each condition can have an action attached. Each action is only excuted
+%%% once, so if two rules end with a <b>send</b> action or a <b>count</b>
+%%% action for the same counter only one of them is executed. However
+%%% <b>count</b> for different counters are all excutred. Possible actions are:
+%%% <dl>
+%%%   <dt><b>drop</b></dt>
+%%%   <dd>Drops this spawn, does not excute futher conditions in this rule
+%%%       neither does it excute furhter rules.</dd>
+%%%   <dt><b>skip</b></dt>
+%%%   <dd>Ships the rest of the rule but continues with the next rule.</dd>
+%%%   <dt><b>continue</b></dt>
+%%%   <dd>If the condition matches it continues the current rule, otherwise
+%%%       skips therest of the rule.</dd>
+%%%   <dt><b>send</b></dt>
+%%%   <dd>Marks the span to be send.</dd>
+%%%   <dt><b>count(string | tag ...)</b></dt>
+%%%   <dd>Coun the current span with a given counter name, elements can either
+%%%       be a literal string, or a name of a field that will be looked up.</dd>
+%%% </dl>
+%%%
+%%% An example ruleset would be:
+%%%
+%%% <pre>
+%%% %% If our span takes less then 5s skip the rest of the rules
+%%% slow_spans(otters_span_duration > 5000000) ->
+%%%   continue.
+%%% %% Skip requests that are not radius requests
+%%% slow_spans(otters_span_name == 'radius request') ->
+%%%   continue.
+%%% %% Count
+%%% slow_spans() ->
+%%%   count('long_radius_request').
+%%% %% Send
+%%% slow_spans() ->
+%%%   send.
+%%% %% Count them all
+%%% count() ->
+%%%   count('request', otters_span_name, final_result).
+%%% </pre>
+%%% @end
+%%% Created : 14 Apr 2017 by Heinz N. Gies <heinz@licenser.net>
+%%%-------------------------------------------------------------------
 -module(ol).
 -include_lib("otters/include/otters.hrl").
 -export([span/1, compile/1, clear/0]).
@@ -5,6 +95,11 @@
 -define(DURATION, "otters_span_duration").
 -define(NAME, "otters_span_name").
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Compiles a filter script and generates the related module.
+%% @end
+%%--------------------------------------------------------------------
 compile(S) ->
     {ok, T, _} = of_lexer:string(S),
     {ok, Rs} = of_parser:parse(T),
@@ -14,15 +109,28 @@ compile(S) ->
     application:set_env(otters, filter_string, S),
     dynamic_compile:load_from_string(lists:flatten(Rendered)).
 
-
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes the filter script and module.
+%% @end
+%%--------------------------------------------------------------------
 clear() ->
     application:set_env(otters, filter_string, undefined),
     code:purge(ol_filter),
     code:delete(ol_filter).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Tests a span and performs the requested actions on it.
+%% @end
+%%--------------------------------------------------------------------
 span(#span{tags = Tags, name = Name, duration = Duration} = Span) ->
     {ok, Actions} =  ol_filter:check(Tags, Name, Duration),
-    perform(Actions, Span).
+    perform(lists:usort(Actions), Span).
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
 %% Since dialyzer will arn that the 'dummy'/empty implementation
 %% of ol_filter can't ever match send or cout we have to ignore
@@ -38,9 +146,8 @@ perform([{count, Path} | Rest], Span) ->
     perform(Rest, Span).
 
 %%%===================================================================
-%%% Internal functions
+%%% Compiler functions
 %%%===================================================================
-
 
 group_rules([{Name, Test, Result} | Rest]) ->
     group_rules(Rest, Name, [{Test, Result}], []).

@@ -16,8 +16,8 @@
 %%% specific language governing permissions and limitations
 %%% under the License.
 %%%
-%%%-------------------------------------------------------------------
-
+%%% @end
+%%% -------------------------------------------------------------------
 
 %% ========================== Config API ============================
 %% The default implementation uses the application environment to
@@ -33,7 +33,12 @@
 %% file as a reference.
 
 -module(otters_config).
--compile(export_all).
+-export([
+         list/0,
+         read/1,
+         read/2,
+         write/2
+        ]).
 
 list() ->
     application:get_all_env(otters).

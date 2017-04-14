@@ -16,31 +16,39 @@
 %%% specific language governing permissions and limitations
 %%% under the License.
 %%%
+%%% @doc
+%%% This module implements a simple way of giving operational visibility
+%%% to events/spans in the system. It expects a Key and Data where the
+%%% Key is used to increment a counter in a table and also to store the
+%%% last received Data for that Key. The Data is preferred to be a list
+%%% of 2 element {K,V} tuples, if it is any other format, it uses
+%%% [{data, Data}] to store the last information.
+%%% @end
 %%%-------------------------------------------------------------------
-
 -module(otters_snapshot_count).
--compile(export_all).
+-export([
+         delete_all_counters/0,
+         delete_counter/1,
+         get_snap/1,
+         list_counts/0,
+         snapshot/2,
+         sup_init/0
+        ]).
 
-%% This module implements a simple way of giving operational visibility
-%% to events/spans in the system. It expects a Key and Data where the
-%% Key is used to increment a counter in a table and also to store the
-%% last received Data for that Key. The Data is preferred to be a list
-%% of 2 element {K,V} tuples, if it is any other format, it uses
-%% [{data, Data}] to store the last information.
 
 snapshot(Key, [{_, _} |_ ] = Data) ->
     {_, _, Us} = os:timestamp(),
     {{Year, Month, Day}, {Hour, Min, Sec}} = calendar:local_time(),
     ets:insert(
-        otters_snapshot_store,
-        {
-            Key,
-            [
-                {snap_timestamp, {Year, Month, Day, Hour, Min, Sec, Us}}
-                | Data
-            ]
-        }
-    ),
+      otters_snapshot_store,
+      {
+        Key,
+        [
+         {snap_timestamp, {Year, Month, Day, Hour, Min, Sec, Us}}
+         | Data
+        ]
+      }
+     ),
     case catch ets:update_counter(otters_snapshot_count, Key, 1) of
         {'EXIT', {badarg, _}} ->
             ets:insert(otters_snapshot_count, {Key, 1});
@@ -58,19 +66,16 @@ get_snap(Key) ->
 
 delete_counter(Key) ->
     ets:delete(otters_snapshot_store, Key),
-    ets:delete(otters_snapshot_count, Key).
+    ets:delete(otters_snapshot_count, Key),
+    ok.
 
 delete_all_counters() ->
     ets:delete_all_objects(otters_snapshot_store),
-    ets:delete_all_objects(otters_snapshot_count).
+    ets:delete_all_objects(otters_snapshot_count),
+    ok.
 
-sup_init() -> [
-    ets:new(
-        Tab,
-        [named_table, public, {Concurrency, true}]
-    ) ||
-    {Tab, Concurrency} <- [
-        {otters_snapshot_count, write_concurrency},
-        {otters_snapshot_store, write_concurrency}
-    ]
-].
+sup_init() ->
+    [ets:new(
+       Tab, [named_table, public, {Concurrency, true}]) ||
+        {Tab, Concurrency} <- [{otters_snapshot_count, write_concurrency},
+                               {otters_snapshot_store, write_concurrency}]].
