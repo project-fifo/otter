@@ -1,0 +1,22 @@
+%% -*- erlang -*-
+@author Ferenc Holzhauser [https://github.com/fholzhauser]
+@author Chandru Mullaparthi [https://github.com/cmullaparthi]
+@author Heinz N. Gies [https://github.com/licenser]
+
+@copyright 2017, Bluehouse Technology Ltd
+@doc otters is an application to enable Opentracing support in Erlang.
+
+<a href="http://opentracing.io">OpenTracing</a> is an open initiative to provide a
+set of terms and methods to produce, collect and correlate trace
+information in a distributed environment across different programming
+languages, platforms and protocols.
+
+Otters is a fork of the <a href="https://github.com/Bluehouse-Technology/otter">
+otter</a> library that focuses on community involvement, performance and code
+quality.
+
+@title
+otters - Open Tracing Toolkit for ERlang
+
+@version
+0.2.0
