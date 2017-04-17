@@ -1,3 +1,30 @@
+%%%-------------------------------------------------------------------
+%%% Copyright (c) 2017 Heinz N. Gies
+%%%
+%%% Permission is hereby granted, free of charge, to any person obtaining a copy
+%%% of this software and associated documentation files (the "Software"), to
+%%% deal in the Software without restriction, including without limitation the
+%%% rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+%%% sell copies of the Software, and to permit persons to whom the Software is
+%%% furnished to do so, subject to the following conditions:
+%%%
+%%% The above copyright notice and this permission notice shall be included in
+%%% all copies or substantial portions of the Software.</br>
+%%%
+%%% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+%%% IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+%%% FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+%%% AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+%%% LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING,
+%%% FROM OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+%%% IN THE SOFTWARE.
+%%%
+%%% @author Heinz N. Gies <heinz@project-fifo.net>
+%%% @copyright (C) 2017, Heinz N. Gies
+%%% @doc High perofrmance encoder for the zapkin thrift protocol.
+%%% @end
+%%%-------------------------------------------------------------------
+
 -module(bench_SUITE).
 -include_lib("common_test/include/ct.hrl").
 -include_lib("eunit/include/eunit.hrl").
@@ -268,9 +295,13 @@ bench_encoding(_) ->
     Spans1 = [Spans || _ <- lists:seq(1, Count)],
     Spans2 = lists:flatten(Spans1),
     Total = length(Spans2),
-    {Te, Encoded} = timer:tc(otters_conn_zipkin, encode_spans, [Spans2]),
+    {To, _Encoded} = timer:tc(otters_conn_zipkin, encode_spans, [Spans2]),
+    {Te, Encoded} = timer:tc(otters_zipkin_encoder, encode, [Spans2]),
+
     io:format(user, "Encoding: ~.2f microseconds / span.~n",
               [Te / Total]),
+    io:format(user, "Encoding(Old): ~.2f microseconds / span.~n",
+              [To / Total]),
     {Td, _} = timer:tc(otters_conn_zipkin, decode_spans, [Encoded]),
     io:format(user, "Decoding: ~.2f microseconds / span.~n",
               [Td / Total]),

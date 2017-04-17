@@ -5,6 +5,19 @@
 
 Cleanup of otter with a community focus. Because multiple otters build a damn a lot faster!
 
+Otters is
+
+* **up to 10x faster** when filtering spans
+* **up to 20x faster** encoding data to send it
+* using an easy to use filtering language
+* including less invasive dependencies
+* Dialyzer 'clean'
+* Proactive im merging community contributes
+* using EQC tests for higher test coverage
+* using Elvis listing for code style
+* providing a cleaner API
+* more riddled with typos in the docs
+
 OpenTracing Toolkit for Erlang
 
 ![otter logo](docs/images/otter_logo.png)

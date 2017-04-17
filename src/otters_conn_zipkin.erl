@@ -25,15 +25,14 @@
 %% Sending is async
 
 -module(otters_conn_zipkin).
--compile(export_all).
--include("otters.hrl").
+-export([sup_init/0, store_span/1, send_buffer/0]).
+-include_lib("otters/include/otters.hrl").
 
--define(T_I16,     6).
--define(T_I32,     8).
--define(T_I64,    10).
--define(T_STRING, 11).
--define(T_STRUCT, 12).
--define(T_LIST,   15).
+-xref_ignore([encode_spans/1]).
+
+-ifdef(TEST).
+-compile(export_all).
+-endif.
 
 sup_init() ->
     [
@@ -90,7 +89,7 @@ send_batch_to_zipkin(Spans) ->
     send_batch_to_zipkin(ZipkinURL, Spans).
 
 send_batch_to_zipkin(ZipkinURL, Spans) ->
-    Data = encode_spans(Spans),
+    Data = otters_zipkin_encoder:encode(Spans),
     send_spans_http(ZipkinURL, Data).
 
 send_spans_http(ZipkinURL, Data) ->
@@ -118,31 +117,10 @@ send_spans_http(httpc, ZipkinURL, Data) ->
             Err
     end.
 
+-ifdef(TEST).
 encode_spans(Spans) ->
-    Size = length(Spans),
-    AddDfltToLog = otters_config:read(zipkin_add_default_service_to_logs,
-                                      false),
-    AddDfltToTag = otters_config:read(zipkin_add_default_service_to_tags,
-                                      false),
-    DfltSrv = <<?T_STRUCT, 4:16, (host_to_struct(default))/binary>>,
-    UndefSrvLog = case AddDfltToLog of
-                      true ->
-                          DfltSrv;
-                      _ ->
-                           <<>>
-                   end,
-    UndefSrvTag = case AddDfltToTag of
-                       true ->
-                          DfltSrv;
-                       _ ->
-                           <<>>
-                   end,
-    DfltTag = otters_config:read(zipkin_add_host_tag_to_span, undefined),
-    <<?T_STRUCT, Size:32,
-      << << (span_to_struct(S, DfltTag, DfltSrv,
-                            UndefSrvLog, UndefSrvTag))/binary >>
-         || S <- Spans>>/binary>>.
-
+    Data = {struct, [span_to_struct(S) || S <- Spans]},
+    encode_implicit_list(Data).
 
 decode_spans(Data) ->
     {{struct, StructList}, _Rest} = decode_implicit_list(Data),
@@ -157,76 +135,74 @@ span_to_struct(#span{
                   tags = TagsM,
                   timestamp = Timestamp,
                   duration = Duration
-                 }, DfltTag, DfltSrv, UndefSrvLog, UndefSrvTag) ->
+                 }) ->
     Tags = maps:to_list(TagsM),
-    FinalTags = case DfltTag of
-                    {Key, Value} ->
-                        [{Key, {Value, default}} | Tags];
-                    _ ->
-                        Tags
-                end,
-    LogSize = length(Logs),
-    TagSize = length(FinalTags),
-    NameBin = otters_lib:to_bin(Name),
-    ParentBin =case ParentId of
-                   undefined ->
-                       <<>>;
-                   ParentId ->
-                       <<?T_I64, 5:16, ParentId:64/signed-integer>>
-               end,
-    LogsBin = << <<(log_to_annotation(Log, DfltSrv, UndefSrvLog))/binary>>
-                 || Log <- Logs >>,
-    TagsBin =
-        << <<(tag_to_binary_annotation(Tag, DfltSrv, UndefSrvTag))/binary>>
-           || Tag <- FinalTags >>,
-    <<
-      %% Header
-      ?T_I64,    1:16, TraceId:64/signed-integer,
-      ?T_STRING, 3:16, (byte_size(NameBin)):32, NameBin/binary,
-      ?T_I64,    4:16, Id:64/signed-integer,
-      ParentBin/binary,
-      %% Logs
-      ?T_LIST,   6:16, ?T_STRUCT, LogSize:32, LogsBin/bytes,
-      %% Tags
-      ?T_LIST,   8:16, ?T_STRUCT, TagSize:32, TagsBin/bytes,
-      %% Tail
-      ?T_I64,   10:16, Timestamp:64/signed-integer,
-      ?T_I64,   11:16, Duration:64/signed-integer,
-      0
-    >>.
+    FinalTags =
+        case otters_config:read(zipkin_add_host_tag_to_span, undefined) of
+            {Key, Value} ->
+                [{Key, {Value, default}} | Tags];
+            _ ->
+                Tags
+        end,
+    [
+     {1, i64, TraceId},
+     {3, string, otters_lib:to_bin(Name)},
+     {4, i64, Id}
+    ] ++
+        case ParentId of
+            undefined ->
+                [];
+            ParentId ->
+                [{5, i64, ParentId}]
+        end ++
+        [
+         {6, list, {
+               struct,
+               [log_to_annotation(Log) || Log <- Logs]
+              }},
+         {8, list, {
+               struct,
+               [tag_to_binary_annotation(Tag) || Tag <- FinalTags]
+              }},
+         {10, i64, Timestamp},
+         {11, i64, Duration}
+        ].
 
-service_to_bin(undefined, _, _DfltSrv, UndefServ) ->
-    UndefServ;
-service_to_bin(default, _, DfltSrv, _UndefServ) ->
-    DfltSrv;
-service_to_bin(Service, ID, _DfltSrv, _UndefServ) ->
-    HostBin = host_to_struct(Service),
-    <<?T_STRUCT, ID:16, HostBin/binary>>.
+log_to_annotation({Timestamp, Text}) ->
+    case otters_config:read(zipkin_add_default_service_to_logs, false) of
+        true ->
+            log_to_annotation({Timestamp, Text, default});
+        false ->
+            [
+             {1, i64, Timestamp},
+             {2, string, otters_lib:to_bin(Text)}
+            ]
+    end;
+log_to_annotation({Timestamp, Text, Service}) ->
+    [
+     {1, i64, Timestamp},
+     {2, string, otters_lib:to_bin(Text)},
+     {3, struct, host_to_struct(Service)}
+    ].
 
-log_to_annotation({Timestamp, Text}, DfltSrv, UndefSrv) ->
-    log_to_annotation({Timestamp, Text, undefined}, DfltSrv, UndefSrv);
-
-log_to_annotation({Timestamp, Text, Service}, DfltSrv, UndefSrv) ->
-    TextBin = otters_lib:to_bin(Text),
-    SrvBin = service_to_bin(Service, 3, DfltSrv, UndefSrv),
-    <<?T_I64,    1:16, Timestamp:64/signed-integer,
-      ?T_STRING, 2:16, (byte_size(TextBin)):32, TextBin/binary,
-      SrvBin/binary,
-      0>>.
-
-tag_to_binary_annotation({Key, {Value, Service}}, DfltSrv, UndefServ)
-  when is_binary(Key) ->
-    ValueBin = otters_lib:to_bin(Value),
-    SrvBin = service_to_bin(Service, 4, DfltSrv, UndefServ),
-    <<?T_STRING, 1:16, (byte_size(Key)):32, Key/binary,
-      ?T_STRING, 2:16, (byte_size(ValueBin)):32, ValueBin/binary,
-      ?T_I32,    3:16, 6:32/signed-integer,
-      SrvBin/binary,
-      0>>;
-
-tag_to_binary_annotation({Key, {Value, Service}}, DfltSrv, UndefServ) ->
-    tag_to_binary_annotation({otters_lib:to_bin(Key), {Value, Service}},
-                             DfltSrv, UndefServ).
+tag_to_binary_annotation({Key, {Value, undefined}}) ->
+    case otters_config:read(zipkin_add_default_service_to_tags, false) of
+        true ->
+            tag_to_binary_annotation({Key, {Value, default}});
+        false ->
+            [
+             {1, string, otters_lib:to_bin(Key)},
+             {2, string, otters_lib:to_bin(Value)},
+             {3, i32, 6}
+            ]
+    end;
+tag_to_binary_annotation({Key, {Value, Service}}) ->
+    [
+     {1, string, otters_lib:to_bin(Key)},
+     {2, string, otters_lib:to_bin(Value)},
+     {3, i32, 6},
+     {4, struct, host_to_struct(Service)}
+    ].
 
 host_to_struct(default) ->
     DefaultService = otters_config:read(
@@ -244,11 +220,11 @@ host_to_struct(Service)
                      otters_config:read(zipkin_tag_host_port, 0)
                    });
 host_to_struct({Service, Ip, Port}) ->
-    IPInt = otters_lib:ip_to_i32(Ip),
-    <<?T_I32,    1:16, IPInt:32/signed-integer,
-      ?T_I16,    2:16, Port:16/signed-integer,
-      ?T_STRING, 3:16, (byte_size(Service)):32, Service/binary,
-      0>>.
+    [
+     {1, i32, otters_lib:ip_to_i32(Ip)},
+     {2, i16, Port},
+     {3, string, Service}
+    ].
 
 struct_to_span(StructData) ->
     struct_to_span(StructData, #span{}).
@@ -332,6 +308,66 @@ struct_to_host([], Host) ->
 decode_implicit_list(BinaryData) ->
     decode(list, BinaryData).
 
+encode_implicit_list(Data) ->
+    encode({list, Data}).
+
+%% Encoding functions
+encode({Id, Type, Data}) ->
+    TypeId = map_type(Type),
+    EData = encode({Type, Data}),
+    <<TypeId, Id:16, EData/bytes>>;
+%% .. and without Id (i.e. part of list/set/map)
+encode({bool, true}) ->
+    <<1>>;
+encode({bool, false}) ->
+    <<0>>;
+encode({byte, Val}) ->
+    <<Val>>;
+encode({double, Val}) ->
+    <<Val:64/float>>;
+encode({i16, Val}) ->
+    <<Val:16/signed-integer>>;
+encode({i32, Val}) ->
+    <<Val:32/signed-integer>>;
+encode({i64, Val}) ->
+    <<Val:64/signed-integer>>;
+encode({string, Val}) when is_list(Val) ->
+    Size = length(Val),
+    %% Might want to convert this to UTF-8 binary first, however for now
+    %% I'll leave it to the next encoding when binary can be provided in
+    %% UTF-8 format. In this part is kindly expected it to be ASCII
+    %% string
+    Bytes = list_to_binary(Val),
+    <<Size:32, Bytes/bytes>>;
+encode({string, Val}) when is_binary(Val) ->
+    Size = byte_size(Val),
+    <<Size:32, Val/bytes>>;
+encode({list, {ElementType, Data}}) ->
+    ElementTypeId = map_type(ElementType),
+    Size = length(Data),
+    EData = list_to_binary([
+                            encode({ElementType, Element}) ||
+                               Element <- Data
+                           ]),
+    <<ElementTypeId, Size:32, EData/bytes>>;
+encode({set, Data}) ->
+    encode({list, Data});
+encode({struct, Data}) ->
+    EData = list_to_binary([
+                            encode(StructElement) ||
+                               StructElement <- Data
+                           ]),
+    <<EData/bytes, 0>>;
+encode({map, {KeyType, ValType, Data}}) ->
+    KeyTypeId = map_type(KeyType),
+    ValTypeId = map_type(ValType),
+    Size = length(Data),
+    EData = list_to_binary([
+                            [encode({KeyType, Key}), encode({ValType, Val})] ||
+                               {Key, Val} <- Data
+                           ]),
+    <<KeyTypeId, ValTypeId, Size:32, EData/bytes>>.
+
 %% Decoding functions
 decode(<<TypeId, Id:16, Data/bytes>>) ->
     Type = map_type(TypeId),
@@ -400,22 +436,23 @@ decode_list(ElementType, Size, Elements, Acc) ->
 map_type(2)     -> bool;
 map_type(3)     -> byte;
 map_type(4)     -> double;
-map_type(?T_I16)    -> i16;
-map_type(?T_I32)    -> i32;
-map_type(?T_I64)    -> i64;
-map_type(?T_STRING) -> string;
-map_type(?T_STRUCT) -> struct;
+map_type(6)     -> i16;
+map_type(8)     -> i32;
+map_type(10)    -> i64;
+map_type(11)    -> string;
+map_type(12)    -> struct;
 map_type(13)    -> map;
 map_type(14)    -> set;
-map_type(?T_LIST)   -> list;
+map_type(15)    -> list;
 map_type(bool)  -> 2;
 map_type(byte)  -> 3;
 map_type(double)-> 4;
-map_type(i16)   -> ?T_I16;
-map_type(i32)   -> ?T_I32;
-map_type(i64)   -> ?T_I64;
-map_type(string)-> ?T_STRING;
-map_type(struct)-> ?T_STRUCT;
+map_type(i16)   -> 6;
+map_type(i32)   -> 8;
+map_type(i64)   -> 10;
+map_type(string)-> 11;
+map_type(struct)-> 12;
 map_type(map)   -> 13;
 map_type(set)   -> 14;
-map_type(list)  -> ?T_LIST.
+map_type(list)  -> 15.
+-endif.
