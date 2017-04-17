@@ -49,7 +49,7 @@
 
           add_tag_to_log       :: boolean(),
           add_tag_to_tag       :: boolean(),
-          add_tag              :: undefined | otters:service(),
+          add_tag              :: undefined | {otters:info(), otters:info()},
           server_bin_log_dflt  = <<>> :: binary(),
           server_bin_tag_dflt  = <<>> :: binary(),
           server_bin_log_undef = <<>> :: binary(),
