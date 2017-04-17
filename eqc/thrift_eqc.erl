@@ -91,7 +91,7 @@ prop_encode_old() ->
             begin
                 Spans = [eval(S) || S <- Raw],
                 Encoded = otters_zipkin_encoder:encode(Spans),
-                EncodedOld = otters_conn_zipkin:encode_spans_old(Spans),
+                EncodedOld = otters_conn_zipkin:encode_spans(Spans),
                 ?WHENFAIL(
                    io:format(user,
                              "~p =>\n~p =/=\n~p~n",
@@ -103,10 +103,8 @@ prop_encode_old() ->
 prop_cmp_log() ->
     ?FORALL(Log, log(),
             begin
-                {_DfltTag, DfltSrv, UndefSrvLog, _UndefSrvTag} =
-                    otters_zipkin_encoder:defaults(),
-                Encoded = otters_zipkin_encoder:encode_log(Log, DfltSrv,
-                                                           UndefSrvLog),
+                Cfg = otters_zipkin_encoder:defaults(),
+                Encoded = otters_zipkin_encoder:encode_log(Log, Cfg),
                 Raw = otters_conn_zipkin:log_to_annotation(Log),
                 EncodedOld = otters_conn_zipkin:encode({struct, Raw}),
                 ?WHENFAIL(
@@ -119,10 +117,8 @@ prop_cmp_log() ->
 prop_cmp_tag() ->
     ?FORALL(Tag, tag(),
             begin
-                {_DfltTag, DfltSrv, _UndefSrvLog, UndefSrvTag} =
-                    otters_zipkin_encoder:defaults(),
-                Encoded = otters_zipkin_encoder:encode_tag(Tag, DfltSrv,
-                                                           UndefSrvTag),
+                Cfg = otters_zipkin_encoder:defaults(),
+                Encoded = otters_zipkin_encoder:encode_tag(Tag, Cfg),
                 Raw = otters_conn_zipkin:tag_to_binary_annotation(Tag),
                 EncodedOld = otters_conn_zipkin:encode({struct, Raw}),
                 ?WHENFAIL(

@@ -23,6 +23,7 @@
 %%% @copyright (C) 2017, Heinz N. Gies
 %%% @doc High perofrmance encoder for the zapkin thrift protocol.
 %%% @end
+%%%-------------------------------------------------------------------
 
 -module(otters_zipkin_encoder).
 -export([encode/1]).
@@ -39,35 +40,69 @@
 -define(T_STRUCT, 12).
 -define(T_LIST,   15).
 
+
+-record(conf,
+        {
+          service              :: binary(),
+          ip                   :: non_neg_integer(),
+          port                 :: non_neg_integer(),
+
+          add_tag_to_log       :: boolean(),
+          add_tag_to_tag       :: boolean(),
+          add_tag              :: undefined | otters:service(),
+          server_bin_log_dflt  = <<>> :: binary(),
+          server_bin_tag_dflt  = <<>> :: binary(),
+          server_bin_log_undef = <<>> :: binary(),
+          server_bin_tag_undef = <<>> :: binary()
+        }).
+
 encode(#span{} = S) ->
     encode([S]);
 
 encode(Spans) when is_list(Spans) ->
     Size = length(Spans),
-    {DfltTag, DfltSrv, UndefSrvLog, UndefSrvTag} = defaults(),
+    Cfg = defaults(),
     <<?T_STRUCT, Size:32,
-      << << (encode_span(S, DfltTag, DfltSrv,
-                         UndefSrvLog, UndefSrvTag))/binary >>
+      << << (encode_span(S, Cfg))/binary >>
          || S <- Spans>>/binary>>.
 
 defaults() ->
+    DefaultService = cfg(zipkin_tag_host_service, atom_to_binary(node(), utf8)),
+    DfltIP = otters_lib:ip_to_i32(cfg(zipkin_tag_host_ip, {127, 0, 0, 1})),
+    DfltPort = cfg(zipkin_tag_host_port, 0),
+
     AddDfltToLog = cfg(zipkin_add_default_service_to_logs, false),
     AddDfltToTag = cfg(zipkin_add_default_service_to_tags, false),
-    DfltSrv = <<?T_STRUCT, 4:16, (encode_host(default))/binary>>,
-    UndefSrvLog = case AddDfltToLog of
-                      true ->
-                          DfltSrv;
-                      _ ->
-                          <<>>
-                  end,
-    UndefSrvTag = case AddDfltToTag of
-                      true ->
-                          DfltSrv;
-                      _ ->
-                          <<>>
-                  end,
-    DfltTag = cfg(zipkin_add_host_tag_to_span, undefined),
-    {DfltTag, DfltSrv, UndefSrvLog, UndefSrvTag}.
+    C0 =     #conf{
+                service = DefaultService,
+                ip      = DfltIP,
+                port    = DfltPort,
+
+                add_tag_to_log = AddDfltToLog,
+                add_tag_to_tag = AddDfltToTag,
+                add_tag        = cfg(zipkin_add_host_tag_to_span, undefined)
+               },
+
+    HostBin = encode_host(default, C0),
+    LogHostBin = <<?T_STRUCT, 3:16, HostBin/binary>>,
+    TagHostBin = <<?T_STRUCT, 4:16, HostBin/binary>>,
+    C0#conf{
+
+      server_bin_log_dflt = LogHostBin,
+      server_bin_tag_dflt = TagHostBin,
+
+      server_bin_log_undef = case AddDfltToLog of
+                                 true ->
+                                     LogHostBin;
+                                 _ ->
+                                     <<>>
+                             end,
+      server_bin_tag_undef = case AddDfltToTag of
+                                 true ->
+                                     TagHostBin;
+                                 _ ->
+                                     <<>>
+                             end}.
 
 encode_span(#span{
                id = Id,
@@ -75,31 +110,26 @@ encode_span(#span{
                name = Name,
                parent_id = ParentId,
                logs = Logs,
-               tags = TagsM,
+               tags = Tags,
                timestamp = Timestamp,
                duration = Duration
-              }, DfltTag, DfltSrv, UndefSrvLog, UndefSrvTag) ->
-    Tags = maps:to_list(TagsM),
-    FinalTags = case DfltTag of
-                    {Key, Value} ->
-                        [{Key, {Value, default}} | Tags];
-                    _ ->
-                        Tags
-                end,
+              }, Cfg) ->
+    {Tags0Bin, TagSize}
+        = case Cfg#conf.add_tag of
+              {Key, Value} ->
+                  {encode_tag({Key, {Value, default}}, Cfg),
+                  maps:size(Tags) + 1};
+              _ ->
+                  {<<>>, maps:size(Tags)}
+          end,
     LogSize = length(Logs),
-    TagSize = length(FinalTags),
     NameBin = otters_lib:to_bin(Name),
-    ParentBin =case ParentId of
-                   undefined ->
-                       <<>>;
-                   ParentId ->
-                       <<?T_I64, 5:16, ParentId:64/signed-integer>>
-               end,
-    LogsBin = << <<(encode_log(Log, DfltSrv, UndefSrvLog))/binary>>
-                 || Log <- Logs >>,
-    TagsBin =
-        << <<(encode_tag(Tag, DfltSrv, UndefSrvTag))/binary>>
-           || Tag <- FinalTags >>,
+    ParentBin = case ParentId of
+                    undefined ->
+                        <<>>;
+                    ParentId ->
+                        <<?T_I64, 5:16, ParentId:64/signed-integer>>
+                end,
     <<
       %% Header
       ?T_I64,    1:16, TraceId:64/signed-integer,
@@ -107,30 +137,40 @@ encode_span(#span{
       ?T_I64,    4:16, Id:64/signed-integer,
       ParentBin/binary,
       %% Logs
-      ?T_LIST,   6:16, ?T_STRUCT, LogSize:32, LogsBin/bytes,
+      ?T_LIST,   6:16, ?T_STRUCT, LogSize:32,
+      (<< <<(encode_log(Log, Cfg))/binary>> || Log <- Logs >>)/bytes,
       %% Tags
-      ?T_LIST,   8:16, ?T_STRUCT, TagSize:32, TagsBin/bytes,
+      ?T_LIST,   8:16, ?T_STRUCT, TagSize:32, Tags0Bin/binary,
+      (<< <<(encode_tag(Tag, Cfg))/binary>>
+          || Tag <- maps:to_list(Tags)>>)/bytes,
       %% Tail
       ?T_I64,   10:16, Timestamp:64/signed-integer,
       ?T_I64,   11:16, Duration:64/signed-integer,
-      0
-    >>.
+      0>>.
 
 
-encode_host(default) ->
-    DefaultService = cfg(zipkin_tag_host_service, atom_to_list(node())),
-    encode_host(DefaultService);
+encode_host(default, Cfg) ->
+    encode_host(Cfg#conf.service, Cfg);
 
-encode_host(Service)
-  when is_binary(Service);
-       is_list(Service);
+encode_host(Service, Cfg)
+  when is_binary(Service) ->
+    encode_host({Service, Cfg#conf.ip, Cfg#conf.port}, Cfg);
+
+encode_host(Service, Cfg)
+  when is_list(Service);
        is_atom(Service) ->
     encode_host({
                   otters_lib:to_bin(Service),
-                  cfg(zipkin_tag_host_ip, {127, 0, 0, 1}),
-                  cfg(zipkin_tag_host_port, 0)
-                });
-encode_host({Service, Ip, Port}) ->
+                  Cfg#conf.ip,
+                  Cfg#conf.port
+                }, Cfg);
+encode_host({Service, Ip, Port}, _Cfg) when is_integer(Ip) ->
+    <<?T_I32,    1:16, Ip:32/signed-integer,
+      ?T_I16,    2:16, Port:16/signed-integer,
+      ?T_STRING, 3:16, (byte_size(Service)):32, Service/binary,
+      0>>;
+
+encode_host({Service, Ip, Port}, _Cfg) ->
     IPInt = otters_lib:ip_to_i32(Ip),
     <<?T_I32,    1:16, IPInt:32/signed-integer,
       ?T_I16,    2:16, Port:16/signed-integer,
@@ -138,53 +178,137 @@ encode_host({Service, Ip, Port}) ->
       0>>.
 
 
-encode_log({Timestamp, Text}, DfltSrv, UndefSrv) ->
-    encode_log({Timestamp, Text, undefined}, DfltSrv, UndefSrv);
+%% Log w/o a service
 
-encode_log({Timestamp, Text, Service}, DfltSrv, UndefSrv) ->
+%% binary text
+encode_log({Timestamp, Text}, Cfg) when is_binary(Text)->
+    <<?T_I64,    1:16, Timestamp:64/signed-integer,
+      ?T_STRING, 2:16, (byte_size(Text)):32, Text/binary,
+      (Cfg#conf.server_bin_log_undef)/binary,
+      0>>;
+
+%% other content
+encode_log({Timestamp, Text}, Cfg) ->
     TextBin = otters_lib:to_bin(Text),
-    SrvBin = encode_service(Service, 3, DfltSrv, UndefSrv),
-    %%io:format(user, "Srv: ~p -> ~p\n", [Service, SrvBin]),
+    <<?T_I64,    1:16, Timestamp:64/signed-integer,
+      ?T_STRING, 2:16, (byte_size(TextBin)):32, TextBin/binary,
+      (Cfg#conf.server_bin_log_undef)/binary,
+      0>>;
+
+%% logs w/ undefined service
+
+%% binary text
+encode_log({Timestamp, Text, undefined}, Cfg) when is_binary(Text) ->
+    <<?T_I64,    1:16, Timestamp:64/signed-integer,
+      ?T_STRING, 2:16, (byte_size(Text)):32, Text/binary,
+      (Cfg#conf.server_bin_log_undef)/binary,
+      0>>;
+
+encode_log({Timestamp, Text, undefined}, Cfg) ->
+    TextBin = otters_lib:to_bin(Text),
+    <<?T_I64,    1:16, Timestamp:64/signed-integer,
+      ?T_STRING, 2:16, (byte_size(TextBin)):32, TextBin/binary,
+      (Cfg#conf.server_bin_log_undef)/binary,
+      0>>;
+
+%% logs w/ undefined service
+
+%% binary text
+encode_log({Timestamp, Text, default}, Cfg) when is_binary(Text) ->
+    <<?T_I64,    1:16, Timestamp:64/signed-integer,
+      ?T_STRING, 2:16, (byte_size(Text)):32, Text/binary,
+      (Cfg#conf.server_bin_log_dflt)/binary,
+      0>>;
+
+encode_log({Timestamp, Text, default}, Cfg) ->
+    TextBin = otters_lib:to_bin(Text),
+    <<?T_I64,    1:16, Timestamp:64/signed-integer,
+      ?T_STRING, 2:16, (byte_size(TextBin)):32, TextBin/binary,
+      (Cfg#conf.server_bin_log_dflt)/binary,
+      0>>;
+
+%% Other services
+
+encode_log({Timestamp, Text, Service}, Cfg) when is_binary(Text) ->
+    SrvBin = encode_service(Service, log, Cfg),
+    <<?T_I64,    1:16, Timestamp:64/signed-integer,
+      ?T_STRING, 2:16, (byte_size(Text)):32, Text/binary,
+      SrvBin/binary,
+      0>>;
+
+encode_log({Timestamp, Text, Service}, Cfg) ->
+    TextBin = otters_lib:to_bin(Text),
+    SrvBin = encode_service(Service, log, Cfg),
     <<?T_I64,    1:16, Timestamp:64/signed-integer,
       ?T_STRING, 2:16, (byte_size(TextBin)):32, TextBin/binary,
       SrvBin/binary,
       0>>.
 
-encode_tag({Key, {Value, Service}}, DfltSrv, UndefServ)
+%% Tags undefined
+encode_tag({Key, {Value, undefined}}, Cfg)
+  when is_binary(Key), is_binary(Value) ->
+    <<?T_STRING, 1:16, (byte_size(Key)):32, Key/binary,
+      ?T_STRING, 2:16, (byte_size(Value)):32, Value/binary,
+      ?T_I32,    3:16, 6:32/signed-integer,
+      (Cfg#conf.server_bin_tag_undef)/binary,
+      0>>;
+
+encode_tag({Key, {Value, undefined}}, Cfg)
   when is_binary(Key) ->
     ValueBin = otters_lib:to_bin(Value),
-    SrvBin = encode_service(Service, 4, DfltSrv, UndefServ),
+    <<?T_STRING, 1:16, (byte_size(Key)):32, Key/binary,
+      ?T_STRING, 2:16, (byte_size(ValueBin)):32, ValueBin/binary,
+      ?T_I32,    3:16, 6:32/signed-integer,
+      (Cfg#conf.server_bin_tag_undef)/binary,
+      0>>;
+
+%% TAgs default
+encode_tag({Key, {Value, default}}, Cfg)
+  when is_binary(Key), is_binary(Value) ->
+    <<?T_STRING, 1:16, (byte_size(Key)):32, Key/binary,
+      ?T_STRING, 2:16, (byte_size(Value)):32, Value/binary,
+      ?T_I32,    3:16, 6:32/signed-integer,
+      (Cfg#conf.server_bin_tag_dflt)/binary,
+      0>>;
+
+encode_tag({Key, {Value, default}}, Cfg)
+  when is_binary(Key) ->
+    ValueBin = otters_lib:to_bin(Value),
+    <<?T_STRING, 1:16, (byte_size(Key)):32, Key/binary,
+      ?T_STRING, 2:16, (byte_size(ValueBin)):32, ValueBin/binary,
+      ?T_I32,    3:16, 6:32/signed-integer,
+      (Cfg#conf.server_bin_tag_dflt)/binary,
+      0>>;
+
+%% Other services
+encode_tag({Key, {Value, Service}}, Cfg)
+  when is_binary(Key), is_binary(Value) ->
+    SrvBin = encode_service(Service, tag, Cfg),
+    <<?T_STRING, 1:16, (byte_size(Key)):32, Key/binary,
+      ?T_STRING, 2:16, (byte_size(Value)):32, Value/binary,
+      ?T_I32,    3:16, 6:32/signed-integer,
+      SrvBin/binary,
+      0>>;
+encode_tag({Key, {Value, Service}}, Cfg)
+  when is_binary(Key) ->
+    ValueBin = otters_lib:to_bin(Value),
+    SrvBin = encode_service(Service, tag, Cfg),
     <<?T_STRING, 1:16, (byte_size(Key)):32, Key/binary,
       ?T_STRING, 2:16, (byte_size(ValueBin)):32, ValueBin/binary,
       ?T_I32,    3:16, 6:32/signed-integer,
       SrvBin/binary,
       0>>;
 
-encode_tag({Key, {Value, Service}}, DfltSrv, UndefServ) ->
-    encode_tag({otters_lib:to_bin(Key), {Value, Service}},
-               DfltSrv, UndefServ).
+encode_tag({Key, {Value, Service}}, Cfg) ->
+    encode_tag({otters_lib:to_bin(Key), {Value, Service}}, Cfg).
 
-encode_service(undefined, ID, _DfltSrv, UndefServ) ->
-    case UndefServ of
-        <<?T_STRUCT, AID:16, HostBin/binary>>
-          when AID =/= ID ->
-            <<?T_STRUCT, ID:16, HostBin/binary>>;
-        R ->
-            R
-    end;
+encode_service(Service, log, Cfg) ->
+    HostBin = encode_host(Service, Cfg),
+    <<?T_STRUCT, 3:16, HostBin/binary>>;
+encode_service(Service, tag, Cfg) ->
+    HostBin = encode_host(Service, Cfg),
+    <<?T_STRUCT, 4:16, HostBin/binary>>.
 
-encode_service(default, ID, DfltSrv, _UndefServ) ->
-    case DfltSrv of
-        <<?T_STRUCT, AID:16, HostBin/binary>>
-          when AID =/= ID ->
-            <<?T_STRUCT, ID:16, HostBin/binary>>;
-        R ->
-            R
-    end;
-
-encode_service(Service, ID, _DfltSrv, _UndefServ) ->
-    HostBin = encode_host(Service),
-    <<?T_STRUCT, ID:16, HostBin/binary>>.
 
 cfg(K, D) ->
     otters_config:read(K, D).

@@ -30,9 +30,9 @@
 
 -xref_ignore([encode_spans/1]).
 
-%%-ifdef(TEST).
+-ifdef(TEST).
 -compile(export_all).
-%%-endif.
+-endif.
 
 sup_init() ->
     [
@@ -117,6 +117,7 @@ send_spans_http(httpc, ZipkinURL, Data) ->
             Err
     end.
 
+-ifdef(TEST).
 encode_spans(Spans) ->
     Data = {struct, [span_to_struct(S) || S <- Spans]},
     encode_implicit_list(Data).
@@ -454,3 +455,4 @@ map_type(struct)-> 12;
 map_type(map)   -> 13;
 map_type(set)   -> 14;
 map_type(list)  -> 15.
+-endif.
