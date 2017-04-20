@@ -117,7 +117,7 @@ encode_span(#span{
     {Tags0Bin, TagSize}
         = case Cfg#conf.add_tag of
               {Key, Value} ->
-                  {encode_tag({Key, {Value, default}}, Cfg),
+                  {encode_tag({otters_lib:to_bin(Key), {Value, default}}, Cfg),
                   maps:size(Tags) + 1};
               _ ->
                   {<<>>, maps:size(Tags)}
@@ -177,23 +177,6 @@ encode_host({Service, Ip, Port}, _Cfg) ->
       ?T_STRING, 3:16, (byte_size(Service)):32, Service/binary,
       0>>.
 
-
-%% Log w/o a service
-
-%% binary text
-encode_log({Timestamp, Text}, Cfg) when is_binary(Text)->
-    <<?T_I64,    1:16, Timestamp:64/signed-integer,
-      ?T_STRING, 2:16, (byte_size(Text)):32, Text/binary,
-      (Cfg#conf.server_bin_log_undef)/binary,
-      0>>;
-
-%% other content
-encode_log({Timestamp, Text}, Cfg) ->
-    TextBin = otters_lib:to_bin(Text),
-    <<?T_I64,    1:16, Timestamp:64/signed-integer,
-      ?T_STRING, 2:16, (byte_size(TextBin)):32, TextBin/binary,
-      (Cfg#conf.server_bin_log_undef)/binary,
-      0>>;
 
 %% logs w/ undefined service
 
@@ -297,10 +280,7 @@ encode_tag({Key, {Value, Service}}, Cfg)
       ?T_STRING, 2:16, (byte_size(ValueBin)):32, ValueBin/binary,
       ?T_I32,    3:16, 6:32/signed-integer,
       SrvBin/binary,
-      0>>;
-
-encode_tag({Key, {Value, Service}}, Cfg) ->
-    encode_tag({otters_lib:to_bin(Key), {Value, Service}}, Cfg).
+      0>>.
 
 encode_service(Service, log, Cfg) ->
     HostBin = encode_host(Service, Cfg),

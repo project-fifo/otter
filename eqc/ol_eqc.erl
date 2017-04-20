@@ -84,7 +84,7 @@ letter() ->
 
 %% Generating:
 %% [{kw_arrow,0},{'(',0},{')',0},{kw_arrow,0},{kw_skip,0},{'.',0}]
-prop_parse() ->
+no_prop_parse() ->
     ?FORALL(SymbolicExpr, rule(),
             begin
                 Tokens = eqc_grammar:eval(SymbolicExpr),
@@ -93,7 +93,7 @@ prop_parse() ->
                     {ok, _SyntaxTree} ->
                         true;
                     {error, E} ->
-                        io:format("~p\n~p -> ~p~n", [SymbolicExpr, Tokens, E]),
+                        %%io:format("~p\n~p -> ~p~n", [SymbolicExpr, Tokens, E]),
                         false
                 end
             end).

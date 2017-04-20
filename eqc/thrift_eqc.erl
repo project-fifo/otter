@@ -47,8 +47,7 @@ service() ->
            binary()]).
 
 log() ->
-    oneof([{timestap(), binary()},
-           {timestap(), binary(), service()}]).
+    {timestap(), binary(), service()}.
 
 tag() ->
     {binary(), {binary(), service()}}.
@@ -144,11 +143,13 @@ cleanup(S = #span{
 
 clean_tags(Tags) ->
     maps:map(fun (_, {V, {<<"otters_test">>, {127,0,0,1}, 0}}) ->
-                     {V, default};
+                     {otters_lib:to_bin(V), default};
                  (_, {V, {S, {127,0,0,1}, 0}}) ->
-                     {V, S};
+                     {otters_lib:to_bin(V), S};
+                 (_, {V, T}) ->
+                     {otters_lib:to_bin(V), T};
                  (_, V) ->
-                     V
+                     otters_lib:to_bin(V)
              end, maps:remove(<<"lc">>, Tags)).
 
 clean_logs(Logs) ->
@@ -156,10 +157,10 @@ clean_logs(Logs) ->
 
 
 clean_log({T, V, {<<"otters_test">>, {127,0,0,1}, 0}}) ->
-    {T, V, default};
+    {T, otters_lib:to_bin(V), default};
 clean_log({T, V, {S, {127,0,0,1}, 0}}) ->
-    {T, V, S};
+    {T, otters_lib:to_bin(V), S};
 clean_log({T, V}) ->
-    {T, V, default};
+    {T, otters_lib:to_bin(V), undefined};
 clean_log(O) ->
     O.

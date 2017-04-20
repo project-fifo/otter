@@ -41,11 +41,11 @@
 
 -type info()       :: binary() | iolist() | atom() | integer().
 -type ip4()        :: {0..255, 0..255, 0..255, 0..255}.
--type service()    :: binary() | list() | default |
+-type service()    :: binary() | list() | default | undefined |
                       {binary() | list(), ip4(), integer()}.
 -type trace_id()   :: non_neg_integer().
 -type span_id()    :: non_neg_integer().
--type tag()        :: {info(), service() | undefined}
+-type tag()        :: {info(), service()}
                     | binary() | string() | atom().
 -type tags()       :: #{binary() => tag()}.
 -type span()       :: #span{}.
@@ -106,12 +106,13 @@ start(Name, TraceId, ParentId)
 %% Trace ID and setting the childs parent to the parents Span ID
 %% @end
 %%--------------------------------------------------------------------
--spec start_child(info(), maybe_span()) -> maybe_span().
+-spec start_child(info(), maybe_span() |
+                  {TraceID::trace_id(), SpanID::span_id()}) -> maybe_span().
 start_child(_Name, undefined) ->
     undefined;
-start_child(Name, ParentSpan)
-  when is_record(ParentSpan, span) ->
-    {TraceId, ParentId} = ids(ParentSpan),
+start_child(Name, #span{trace_id = TraceId, parent_id = ParentId}) ->
+    start(Name, TraceId, ParentId);
+start_child(Name, {TraceId, ParentId}) ->
     start(Name, TraceId, ParentId).
 
 
@@ -123,7 +124,7 @@ start_child(Name, ParentSpan)
 -spec tag(maybe_span(), info(), info()) -> maybe_span().
 tag(undefined, _Key, _Value) ->
     undefined;
-tag(Span, Key, Value) ->
+tag(Span = #span{}, Key, Value) ->
     tag(Span, Key, Value, undefined).
 
 
@@ -136,8 +137,7 @@ tag(Span, Key, Value) ->
 -spec tag(maybe_span(), info(), info(), service() | undefined) -> maybe_span().
 tag(undefined, _Key, _Value, _Service) ->
     undefined;
-tag(Span, Key, Value, Service)
-  when is_record(Span, span) ->
+tag(Span= #span{}, Key, Value, Service) ->
     KeyBin = otters_lib:to_bin(Key),
     Span#span{
       tags = maps:put(KeyBin, {v(Value), Service}, Span#span.tags)
@@ -151,11 +151,9 @@ tag(Span, Key, Value, Service)
 -spec log(maybe_span(), info()) -> maybe_span().
 log(undefined, _Text) ->
     undefined;
-log(Span, Text)
-  when is_record(Span, span) ->
-    Logs = Span#span.logs,
+log(Span = #span{logs = Logs}, Text) ->
     Span#span{
-      logs = [{otters_lib:timestamp(), otters_lib:to_bin(Text)} | Logs]
+      logs = [{otters_lib:timestamp(), otters_lib:to_bin(Text), undefined} | Logs]
      }.
 
 %%--------------------------------------------------------------------
@@ -167,9 +165,7 @@ log(Span, Text)
 -spec log(maybe_span(), info(), service()) -> maybe_span().
 log(undefined, _Text, _Service) ->
     undefined;
-log(Span, Text, Service)
-  when is_record(Span, span) ->
-    Logs = Span#span.logs,
+log(Span = #span{logs = Logs}, Text, Service) ->
     Span#span{
       logs = [{otters_lib:timestamp(), otters_lib:to_bin(Text), Service} | Logs]
      }.
@@ -183,10 +179,7 @@ log(Span, Text, Service)
 -spec finish(maybe_span()) -> ok.
 finish(undefined) ->
     undefined;
-finish(Span)
-  when is_record(Span, span) ->
-    Start = Span#span.timestamp,
-    Logs = Span#span.logs,
+finish(Span = #span{logs = Logs, timestamp = Start}) ->
     otters_filter:span(
       Span#span{
         duration = otters_lib:timestamp() - Start,
@@ -199,12 +192,10 @@ finish(Span)
 %% Retrives the Trace ID and the Span ID from a span.
 %% @end
 %%--------------------------------------------------------------------
--spec ids(maybe_span()) -> {trace_id(), span_id()} | undefined.
+-spec ids(maybe_span()) -> {TraceID::trace_id(), SpanID::span_id()} | undefined.
 ids(undefined) ->
     undefined;
-ids(Span)
-  when is_record(Span, span) ->
-    #span{trace_id = TraceId, id = Id} = Span,
+ids(#span{trace_id = TraceId, id = Id}) ->
     {TraceId, Id}.
 
 %%%===================================================================
@@ -213,5 +204,7 @@ ids(Span)
 
 v(I) when is_integer(I) ->
     I;
+v(B) when is_binary(B) ->
+    B;
 v(O) ->
     otters_lib:to_bin(O).
