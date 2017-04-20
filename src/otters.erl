@@ -180,7 +180,7 @@ log(Span = #span{logs = Logs}, Text, Service) ->
 finish(undefined) ->
     undefined;
 finish(Span = #span{logs = Logs, timestamp = Start}) ->
-    otters_filter:span(
+    ol:span(
       Span#span{
         duration = otters_lib:timestamp() - Start,
         logs = lists:reverse(Logs)
