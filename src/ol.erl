@@ -90,10 +90,24 @@
 %%%-------------------------------------------------------------------
 -module(ol).
 -include_lib("otters/include/otters.hrl").
--export([span/1, compile/1, clear/0]).
+-export([span/1, load/1, compile/1, clear/0]).
 
 -define(DURATION, "otters_span_duration").
 -define(NAME, "otters_span_name").
+
+-ifdef(TEST).
+-compile(export_all).
+-endif.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Loads a filter rule file and compiles it
+%% @end
+%%--------------------------------------------------------------------
+load(F) ->
+    {ok, B} = file:read_file(F),
+    S = binary_to_list(B),
+    compile(S).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -103,11 +117,17 @@
 compile(S) ->
     {ok, T, _} = of_lexer:string(S),
     {ok, Rs} = of_parser:parse(T),
-    {ok, Cs} = group_rules(Rs),
+    Rs1 = optimize(Rs),
+    {ok, Cs} = group_rules(Rs1),
     Rendered = render(Cs),
     %%io:format("~s~n", [Rendered]),
     application:set_env(otters, filter_string, S),
-    dynamic_compile:load_from_string(lists:flatten(Rendered)).
+    case dynamic_compile:load_from_string(lists:flatten(Rendered)) of
+        {module, ol_filter} ->
+            ok;
+        E ->
+            E
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -115,22 +135,36 @@ compile(S) ->
 %% @end
 %%--------------------------------------------------------------------
 clear() ->
-    application:set_env(otters, filter_string, undefined),
-    code:purge(ol_filter),
-    code:delete(ol_filter).
+    compile("drop() -> drop.").
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Tests a span and performs the requested actions on it.
 %% @end
 %%--------------------------------------------------------------------
-span(#span{tags = Tags, name = Name, duration = Duration} = Span) ->
-    {ok, Actions} =  ol_filter:check(Tags, Name, Duration),
+span(Span) ->
+    {ok, Actions} = run(Span),
     perform(lists:usort(Actions), Span).
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+optimize([{_,undefined,continue} | R]) ->
+    optimize(R);
+optimize([]) ->
+    [];
+optimize([Rule | Rest]) ->
+    [Rule | optimize(Rest)].
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Tests a span and performs the requested actions on it.
+%% @end
+%%--------------------------------------------------------------------
+run(#span{tags = Tags, name = Name, duration = Duration}) ->
+    ol_filter:check(Tags, Name, Duration).
+
 
 %% Since dialyzer will arn that the 'dummy'/empty implementation
 %% of ol_filter can't ever match send or cout we have to ignore
@@ -148,6 +182,8 @@ perform([{count, Path} | Rest], Span) ->
 %%%===================================================================
 %%% Compiler functions
 %%%===================================================================
+group_rules([]) ->
+    {ok, []};
 
 group_rules([{Name, Test, Result} | Rest]) ->
     group_rules(Rest, Name, [{Test, Result}], []).
@@ -157,15 +193,40 @@ group_rules([{Name, Test, Result} | Rest], Name, Conditions, Acc) ->
 group_rules([{Name, Test, Result} | Rest], LastName, Conditions, Acc) ->
     case lists:keyfind(Name, 1, Acc) of
         false ->
-            Acc1 = [{LastName, lists:reverse(Conditions)} | Acc],
+            Acc1 = [{LastName, optimize_conditions(Conditions)} | Acc],
             group_rules(Rest, Name, [{Test, Result}], Acc1);
         _ ->
             {error, {already_defined, Name}}
     end;
 group_rules([], LastName, Conditions, Acc) ->
-    Acc1 = [{LastName, lists:reverse(Conditions)} | Acc],
-    {ok, lists:reverse(Acc1)}.
+    Acc1 = [{LastName, optimize_conditions(Conditions)} | Acc],
+    {ok, optimize_rules(Acc1, [])}.
 
+%% Continue on the end of a condition makes no sense, there is nothing to
+%% continue to
+optimize_conditions([{_, continue} | R]) ->
+    optimize_conditions(R);
+%% skip on the end of a condition makes no sense, there is nothing to skip
+optimize_conditions([{_, skip} | R]) ->
+    optimize_conditions(R);
+optimize_conditions(R) ->
+    lists:reverse(R).
+
+optimize_rules([{_, []} | R], Acc) ->
+    optimize_rules(R, Acc);
+optimize_rules([E | R], Acc) ->
+    optimize_rules(R, [E | Acc]);
+optimize_rules([], Acc) ->
+    Acc.
+
+render([]) ->
+    ["-module(ol_filter).\n",
+     "-export([check/3]).\n",
+     "-compile(inline).\n",
+     "\n",
+     "check(_Tags, _Name, _Duration) ->\n",
+     "  {ok, []}.\n",
+     "\n"];
 render([{Name,_} | _] = Cs) ->
     ["-module(ol_filter).\n",
      "-export([check/3]).\n",
@@ -201,7 +262,7 @@ render_clauses(_Name, [], _NextRule, _N) ->
 
 render_clauses(Name, [{undefined, drop} | R], NextRule, N) ->
     [rule_name(Name, N), "(_Tags, _Name, _Duration, Acc) ->\n",
-     "  Acc.\n\n",
+     "  {ok, Acc}.\n\n",
      render_clauses(Name, R, NextRule, N + 1)];
 
 %% Special case if we match for duration and name at once

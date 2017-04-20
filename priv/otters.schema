@@ -35,7 +35,7 @@
 
 %% @doc Default service name otter reports
 {mapping, "otters.service", "otters.zipkin_tag_host_service",
- [{default, "otters"},
+ [{default, "{{service}}"},
   {datatype, string}]}.
 
 %% @doc Weather or not to add the default host to logs or not
@@ -68,3 +68,8 @@
          {K, V}
  end
 }.
+
+%% @doc File to read filter rules from
+{mapping, "otters.filter", "otters.filter_file",
+ [{commented, "rules.ot"},
+  {datatype, file}]}.

@@ -168,7 +168,7 @@ span_to_struct(#span{
          {11, i64, Duration}
         ].
 
-log_to_annotation({Timestamp, Text}) ->
+log_to_annotation({Timestamp, Text, undefined}) ->
     case otters_config:read(zipkin_add_default_service_to_logs, false) of
         true ->
             log_to_annotation({Timestamp, Text, default});

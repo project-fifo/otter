@@ -4,25 +4,21 @@
 -include_lib("otters/include/otters.hrl").
 -compile(export_all).
 
-pos_int() ->
-    ?SUCHTHAT(N, int(), N > 0).
-
-
 name() ->
     <<"name">>.
 
 
 parent_id() ->
-    oneof([pos_int(), undefined]).
+    oneof([nat(), undefined]).
 
 trace_id() ->
     int().
 
 timestap() ->
-    pos_int().
+    nat().
 
 duration() ->
-    int().
+    nat().
 tags() ->
     #{}.
 
@@ -47,25 +43,33 @@ ip() ->
 
 service() ->
     oneof([default,
-           {binary(), ip(), pos_int()},
+           {binary(), ip(), nat()},
            binary()]).
 
 log() ->
-    oneof([{timestap(), binary()},
-           {timestap(), binary(), service()}]).
+    {timestap(), binary(), service()}.
 
 tag() ->
     {binary(), {binary(), service()}}.
+
+info() ->
+    oneof([binary(),
+           ?LET(B, binary(), binary_to_list(B)),
+           int(),
+           real(),
+           oneof([test, test1, hello])]).
+
 span(0) ->
     new_span();
+
 
 span(Size) ->
     ?LAZY(oneof(
             [
-             {call, otters, log, [span(Size -1), binary()]},
-             {call, otters, log, [span(Size -1), binary(), service()]},
-             {call, otters, tag, [span(Size -1), binary(), binary()]},
-             {call, otters, tag, [span(Size -1), binary(), binary(), service()]}
+             {call, otters, log, [span(Size -1), info()]},
+             {call, otters, log, [span(Size -1), info(), service()]},
+             {call, otters, tag, [span(Size -1), binary(), info()]},
+             {call, otters, tag, [span(Size -1), binary(), info(), service()]}
             ])).
 
 span() ->
@@ -138,23 +142,25 @@ cleanup(S = #span{
      }.
 
 clean_tags(Tags) ->
-    maps:map(fun (_, {V, {<<"otters_test">>, {127,0,0,1}, 0}}) ->
-                     {V, default};
+    maps:map(fun (_, {V, {<<"otters">>, {127,0,0,1}, 0}}) ->
+                     {otters_lib:to_bin(V), default};
                  (_, {V, {S, {127,0,0,1}, 0}}) ->
-                     {V, S};
+                     {otters_lib:to_bin(V), S};
+                 (_, {V, T}) ->
+                     {otters_lib:to_bin(V), T};
                  (_, V) ->
-                     V
+                     otters_lib:to_bin(V)
              end, maps:remove(<<"lc">>, Tags)).
 
 clean_logs(Logs) ->
     [clean_log(L) || L <- Logs].
 
 
-clean_log({T, V, {<<"otters_test">>, {127,0,0,1}, 0}}) ->
-    {T, V, default};
+clean_log({T, V, {<<"otters">>, {127,0,0,1}, 0}}) ->
+    {T, otters_lib:to_bin(V), default};
 clean_log({T, V, {S, {127,0,0,1}, 0}}) ->
-    {T, V, S};
+    {T, otters_lib:to_bin(V), S};
 clean_log({T, V}) ->
-    {T, V, default};
+    {T, otters_lib:to_bin(V), undefined};
 clean_log(O) ->
     O.

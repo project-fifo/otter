@@ -12,9 +12,8 @@
           %% Tags
           tags = #{} :: otter:tags(),
           %%  logs
-          logs = []  :: [{otters:time_us(), otters:info()} |
-                         {otters:info(), otters:info(),
-                          otters:service() | undefined}],
+          logs = []  :: [{otters:info(), otters:info(),
+                          otters:service()}],
           %% microseconds between span start/end
           duration   :: otters:time_us()
          }).

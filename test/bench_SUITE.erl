@@ -366,6 +366,6 @@ mk_span() ->
                {2, <<"bla">>, undefined},
                {3, <<"blubber">>, default},
                {4, <<"hello">>, {<<"test">>, {127, 0, 0, 1}, 1}},
-               {5, <<"world">>}
+               {5, <<"world">>, undefined}
               ]
       }.
