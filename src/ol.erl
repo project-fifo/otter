@@ -134,9 +134,7 @@ compile(S) ->
 %% @end
 %%--------------------------------------------------------------------
 clear() ->
-    application:set_env(otters, filter_string, undefined),
-    code:purge(ol_filter),
-    code:delete(ol_filter).
+    compile("drop() -> drop.").
 
 %%--------------------------------------------------------------------
 %% @doc
