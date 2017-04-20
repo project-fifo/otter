@@ -71,19 +71,24 @@ start(Name) ->
 %% Starts a new span with a given Trace ID.
 %% @end
 %%--------------------------------------------------------------------
--spec start(info(), integer()) -> span().
+-spec start(info(), integer() | undefined) ->
+                   maybe_span().
+start(_Name, undefined) ->
+    undefined;
 start(Name, TraceId)
   when is_integer(TraceId) ->
     start(Name, TraceId, undefined).
 
--spec start(info(), integer(), integer() | undefined) ->
-                   span().
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts a new span with a given Trace ID and Parent ID.
 %% @end
 %%--------------------------------------------------------------------
+-spec start(info(), integer() | undefined, integer() | undefined) ->
+                   maybe_span().
+start(_Name, undefined, undefined) ->
+    undefined;
 start(Name, TraceId, ParentId)
   when is_integer(TraceId), (is_integer(ParentId) orelse
                              ParentId =:= undefined) ->
