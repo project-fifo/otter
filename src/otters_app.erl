@@ -30,6 +30,12 @@
 %%====================================================================
 
 start(_StartType, _StartArgs) ->
+    case application:get_env(otters, filter_file, undefined) of
+        undefined ->
+            ok;
+        F ->
+            ok = ol:load(F)
+    end,
     otters_sup:start_link().
 
 %%--------------------------------------------------------------------

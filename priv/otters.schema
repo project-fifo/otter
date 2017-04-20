@@ -68,3 +68,8 @@
          {K, V}
  end
 }.
+
+%% @doc File to read filter rules from
+{mapping, "otters.filter", "otters.filter_file",
+ [{commented, "rules.ot"},
+  {datatype, file}]}.

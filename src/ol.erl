@@ -90,7 +90,7 @@
 %%%-------------------------------------------------------------------
 -module(ol).
 -include_lib("otters/include/otters.hrl").
--export([span/1, compile/1, clear/0]).
+-export([span/1, load/1, compile/1, clear/0]).
 
 -define(DURATION, "otters_span_duration").
 -define(NAME, "otters_span_name").
@@ -98,6 +98,16 @@
 -ifdef(TEST).
 -compile(export_all).
 -endif.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Loads a filter rule file and compiles it
+%% @end
+%%--------------------------------------------------------------------
+load(F) ->
+    {ok, B} = file:read_file(F),
+    S = binary_to_list(B),
+    compile(S).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -111,7 +121,12 @@ compile(S) ->
     Rendered = render(Cs),
     %%io:format("~s~n", [Rendered]),
     application:set_env(otters, filter_string, S),
-    dynamic_compile:load_from_string(lists:flatten(Rendered)).
+    case dynamic_compile:load_from_string(lists:flatten(Rendered)) of
+        {module, ol_filter} ->
+            ok;
+        E ->
+            E
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -129,7 +144,7 @@ clear() ->
 %% @end
 %%--------------------------------------------------------------------
 span(Span) ->
-    {ok, Actions} =  run(Span),
+    {ok, Actions} = run(Span),
     perform(lists:usort(Actions), Span).
 
 %%%===================================================================
