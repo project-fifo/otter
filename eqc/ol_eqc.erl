@@ -72,11 +72,15 @@ kw_() ->
     ?LET(K, ?SIZED(Size, kw_(Size)), lists:flatten([K])).
 
 kw_(0) ->
-    char();
+    [letter()];
 kw_(N) ->
-    [kw_(N - 1), oneof([$_, $@, $-])].
+    [kw_(N - 1), oneof([letter(), choose($0, $9), $_])].
 
-
+letter() ->
+    oneof([
+           choose($a, $z),
+           choose($A, $Z)
+          ]).
 
 %% Generating:
 %% [{kw_arrow,0},{'(',0},{')',0},{kw_arrow,0},{kw_skip,0},{'.',0}]
@@ -93,3 +97,44 @@ prop_parse() ->
                         false
                 end
             end).
+
+prop_compile() ->
+    ?FORALL(SymbolicExpr, rule(),
+            begin
+                Tokens = eqc_grammar:eval(SymbolicExpr),
+                case of_parser:parse(Tokens) of
+                    {ok, Rs} ->
+                        {ok, Cs} = ol:group_rules(Rs),
+                        Rendered = ol:render(Cs),
+                        F = lists:flatten(Rendered),
+                        Res = try
+                                  dynamic_compile:load_from_string(F)
+                              catch
+                                  _:E ->
+                                      E
+                              end,
+                        ?WHENFAIL(io:format(user, "~s~n=>~p~n", [F, Res]),
+                                  Res =:= {module, ol_filter});
+                    {error, _E} ->
+                        true
+                end
+            end).
+
+prop_filter() ->
+    ?FORALL(SymbolicExpr, rule(),
+            ?FORALL(SpanR, thrift_eqc:span(),
+                    begin
+                        Tokens = eqc_grammar:eval(SymbolicExpr),
+                        Span = eval(SpanR),
+                        case of_parser:parse(Tokens) of
+                            {ok, Rs} ->
+                                {ok, Cs} = ol:group_rules(Rs),
+                                Rendered = ol:render(Cs),
+                                F = lists:flatten(Rendered),
+                                dynamic_compile:load_from_string(F),
+                                {ok, _} = ol:run(Span),
+                                true;
+                            {error, _E} ->
+                                true
+                        end
+                    end)).

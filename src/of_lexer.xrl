@@ -32,7 +32,7 @@ Str1      = '([^']|\.)+'
 Str2      = "([^"]|\.)+"
 %"% damn you syntax highlighter
 Instance  = instance
-KW        = [A-Za-z][A-Za-z0-9_@-]*
+KW        = [A-Za-z][A-Za-z0-9_]*
 Comp      = (>|>=|<|=<|==|/=)
 Arrow     = [-][>]
 Skip      = skip

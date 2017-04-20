@@ -4,25 +4,21 @@
 -include_lib("otters/include/otters.hrl").
 -compile(export_all).
 
-pos_int() ->
-    ?SUCHTHAT(N, int(), N > 0).
-
-
 name() ->
     <<"name">>.
 
 
 parent_id() ->
-    oneof([pos_int(), undefined]).
+    oneof([nat(), undefined]).
 
 trace_id() ->
     int().
 
 timestap() ->
-    pos_int().
+    nat().
 
 duration() ->
-    int().
+    nat().
 tags() ->
     #{}.
 
@@ -47,7 +43,7 @@ ip() ->
 
 service() ->
     oneof([default,
-           {binary(), ip(), pos_int()},
+           {binary(), ip(), nat()},
            binary()]).
 
 log() ->
@@ -56,16 +52,25 @@ log() ->
 
 tag() ->
     {binary(), {binary(), service()}}.
+
+info() ->
+    oneof([binary(),
+           ?LET(B, binary(), binary_to_list(B)),
+           int(),
+           real(),
+           oneof([test, test1, hello])]).
+
 span(0) ->
     new_span();
+
 
 span(Size) ->
     ?LAZY(oneof(
             [
-             {call, otters, log, [span(Size -1), binary()]},
-             {call, otters, log, [span(Size -1), binary(), service()]},
-             {call, otters, tag, [span(Size -1), binary(), binary()]},
-             {call, otters, tag, [span(Size -1), binary(), binary(), service()]}
+             {call, otters, log, [span(Size -1), info()]},
+             {call, otters, log, [span(Size -1), info(), service()]},
+             {call, otters, tag, [span(Size -1), binary(), info()]},
+             {call, otters, tag, [span(Size -1), binary(), info(), service()]}
             ])).
 
 span() ->

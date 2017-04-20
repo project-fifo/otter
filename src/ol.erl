@@ -95,6 +95,10 @@
 -define(DURATION, "otters_span_duration").
 -define(NAME, "otters_span_name").
 
+-ifdef(TEST).
+-compile(export_all).
+-endif.
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Compiles a filter script and generates the related module.
@@ -124,13 +128,22 @@ clear() ->
 %% Tests a span and performs the requested actions on it.
 %% @end
 %%--------------------------------------------------------------------
-span(#span{tags = Tags, name = Name, duration = Duration} = Span) ->
-    {ok, Actions} =  ol_filter:check(Tags, Name, Duration),
+span(Span) ->
+    {ok, Actions} =  run(Span),
     perform(lists:usort(Actions), Span).
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Tests a span and performs the requested actions on it.
+%% @end
+%%--------------------------------------------------------------------
+run(#span{tags = Tags, name = Name, duration = Duration}) ->
+    ol_filter:check(Tags, Name, Duration).
+
 
 %% Since dialyzer will arn that the 'dummy'/empty implementation
 %% of ol_filter can't ever match send or cout we have to ignore
@@ -201,7 +214,7 @@ render_clauses(_Name, [], _NextRule, _N) ->
 
 render_clauses(Name, [{undefined, drop} | R], NextRule, N) ->
     [rule_name(Name, N), "(_Tags, _Name, _Duration, Acc) ->\n",
-     "  Acc.\n\n",
+     "  {ok, Acc}.\n\n",
      render_clauses(Name, R, NextRule, N + 1)];
 
 %% Special case if we match for duration and name at once
