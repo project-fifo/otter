@@ -46,7 +46,7 @@
 kw_arrow() ->
     {kw_arrow, nat()}.
 kw_cont() ->
-    {kw_arrow, nat()}.
+    {kw_cont, nat()}.
 kw_count() ->
     {kw_count, nat()}.
 kw_drop() ->
@@ -84,7 +84,7 @@ letter() ->
 
 %% Generating:
 %% [{kw_arrow,0},{'(',0},{')',0},{kw_arrow,0},{kw_skip,0},{'.',0}]
-no_prop_parse() ->
+prop_parse() ->
     ?FORALL(SymbolicExpr, rule(),
             begin
                 Tokens = eqc_grammar:eval(SymbolicExpr),
@@ -93,7 +93,7 @@ no_prop_parse() ->
                     {ok, _SyntaxTree} ->
                         true;
                     {error, E} ->
-                        %%io:format("~p\n~p -> ~p~n", [SymbolicExpr, Tokens, E]),
+                        io:format("~p\n~p -> ~p~n", [SymbolicExpr, Tokens, E]),
                         false
                 end
             end).
@@ -102,22 +102,19 @@ prop_compile() ->
     ?FORALL(SymbolicExpr, rule(),
             begin
                 Tokens = eqc_grammar:eval(SymbolicExpr),
-                case of_parser:parse(Tokens) of
-                    {ok, Rs} ->
-                        {ok, Cs} = ol:group_rules(Rs),
-                        Rendered = ol:render(Cs),
-                        F = lists:flatten(Rendered),
-                        Res = try
-                                  dynamic_compile:load_from_string(F)
-                              catch
-                                  _:E ->
-                                      E
-                              end,
-                        ?WHENFAIL(io:format(user, "~s~n=>~p~n", [F, Res]),
-                                  Res =:= {module, ol_filter});
-                    {error, _E} ->
-                        true
-                end
+                {ok, Rs} = of_parser:parse(Tokens),
+                Rs1 = ol:optimize(Rs),
+                {ok, Cs} = ol:group_rules(Rs1),
+                Rendered = ol:render(Cs),
+                F = lists:flatten(Rendered),
+                Res = try
+                          dynamic_compile:load_from_string(F)
+                      catch
+                          _:E ->
+                              E
+                      end,
+                ?WHENFAIL(io:format(user, "~s~n=>~p~n", [F, Res]),
+                          Res =:= {module, ol_filter})
             end).
 
 prop_filter() ->
@@ -126,15 +123,13 @@ prop_filter() ->
                     begin
                         Tokens = eqc_grammar:eval(SymbolicExpr),
                         Span = eval(SpanR),
-                        case of_parser:parse(Tokens) of
-                            {ok, Rs} ->
-                                {ok, Cs} = ol:group_rules(Rs),
-                                Rendered = ol:render(Cs),
-                                F = lists:flatten(Rendered),
-                                dynamic_compile:load_from_string(F),
-                                {ok, _} = ol:run(Span),
-                                true;
-                            {error, _E} ->
-                                true
-                        end
+                        Tokens = eqc_grammar:eval(SymbolicExpr),
+                        {ok, Rs} = of_parser:parse(Tokens),
+                        Rs1 = ol:optimize(Rs),
+                        {ok, Cs} = ol:group_rules(Rs1),
+                        Rendered = ol:render(Cs),
+                        F = lists:flatten(Rendered),
+                        dynamic_compile:load_from_string(F),
+                        {ok, _} = ol:run(Span),
+                        true
                     end)).

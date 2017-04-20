@@ -117,7 +117,8 @@ load(F) ->
 compile(S) ->
     {ok, T, _} = of_lexer:string(S),
     {ok, Rs} = of_parser:parse(T),
-    {ok, Cs} = group_rules(Rs),
+    Rs1 = optimize(Rs),
+    {ok, Cs} = group_rules(Rs1),
     Rendered = render(Cs),
     %%io:format("~s~n", [Rendered]),
     application:set_env(otters, filter_string, S),
@@ -149,6 +150,13 @@ span(Span) ->
 %%% Internal functions
 %%%===================================================================
 
+optimize([{_,undefined,continue} | R]) ->
+    optimize(R);
+optimize([]) ->
+    [];
+optimize([Rule | Rest]) ->
+    [Rule | optimize(Rest)].
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Tests a span and performs the requested actions on it.
@@ -174,6 +182,8 @@ perform([{count, Path} | Rest], Span) ->
 %%%===================================================================
 %%% Compiler functions
 %%%===================================================================
+group_rules([]) ->
+    {ok, []};
 
 group_rules([{Name, Test, Result} | Rest]) ->
     group_rules(Rest, Name, [{Test, Result}], []).
@@ -183,15 +193,40 @@ group_rules([{Name, Test, Result} | Rest], Name, Conditions, Acc) ->
 group_rules([{Name, Test, Result} | Rest], LastName, Conditions, Acc) ->
     case lists:keyfind(Name, 1, Acc) of
         false ->
-            Acc1 = [{LastName, lists:reverse(Conditions)} | Acc],
+            Acc1 = [{LastName, optimize_conditions(Conditions)} | Acc],
             group_rules(Rest, Name, [{Test, Result}], Acc1);
         _ ->
             {error, {already_defined, Name}}
     end;
 group_rules([], LastName, Conditions, Acc) ->
-    Acc1 = [{LastName, lists:reverse(Conditions)} | Acc],
-    {ok, lists:reverse(Acc1)}.
+    Acc1 = [{LastName, optimize_conditions(Conditions)} | Acc],
+    {ok, optimize_rules(Acc1, [])}.
 
+%% Continue on the end of a condition makes no sense, there is nothing to
+%% continue to
+optimize_conditions([{_, continue} | R]) ->
+    optimize_conditions(R);
+%% skip on the end of a condition makes no sense, there is nothing to skip
+optimize_conditions([{_, skip} | R]) ->
+    optimize_conditions(R);
+optimize_conditions(R) ->
+    lists:reverse(R).
+
+optimize_rules([{_, []} | R], Acc) ->
+    optimize_rules(R, Acc);
+optimize_rules([E | R], Acc) ->
+    optimize_rules(R, [E | Acc]);
+optimize_rules([], Acc) ->
+    Acc.
+
+render([]) ->
+    ["-module(ol_filter).\n",
+     "-export([check/3]).\n",
+     "-compile(inline).\n",
+     "\n",
+     "check(_Tags, _Name, _Duration) ->\n",
+     "  {ok, []}.\n",
+     "\n"];
 render([{Name,_} | _] = Cs) ->
     ["-module(ol_filter).\n",
      "-export([check/3]).\n",

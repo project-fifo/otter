@@ -142,7 +142,7 @@ cleanup(S = #span{
      }.
 
 clean_tags(Tags) ->
-    maps:map(fun (_, {V, {<<"otters_test">>, {127,0,0,1}, 0}}) ->
+    maps:map(fun (_, {V, {<<"otters">>, {127,0,0,1}, 0}}) ->
                      {otters_lib:to_bin(V), default};
                  (_, {V, {S, {127,0,0,1}, 0}}) ->
                      {otters_lib:to_bin(V), S};
@@ -156,7 +156,7 @@ clean_logs(Logs) ->
     [clean_log(L) || L <- Logs].
 
 
-clean_log({T, V, {<<"otters_test">>, {127,0,0,1}, 0}}) ->
+clean_log({T, V, {<<"otters">>, {127,0,0,1}, 0}}) ->
     {T, otters_lib:to_bin(V), default};
 clean_log({T, V, {S, {127,0,0,1}, 0}}) ->
     {T, otters_lib:to_bin(V), S};
