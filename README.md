@@ -358,7 +358,7 @@ There is no configuration involved in the stage of producing span data.
 The paramers mentioned above are functionally specific to the zipkin
 connector. It was simpler to explain them though in this context.
 
-Please also consult the `priv/otters.schema` file for valid configuration options.
+Please also consult the cuttle fisch schema file `priv/otters.schema` for valid configuration options.
 
 ### Span Filtering
 
