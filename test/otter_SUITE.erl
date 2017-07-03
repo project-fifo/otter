@@ -2,10 +2,10 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([all/0, ptest/1, ftest/1]).
+-export([all/0, ptest/1, ftest/1, ptest_push/1]).
 
 all() ->
-    [ftest, ptest].
+    [ftest, ptest, ptest_push].
 
 ptest(_Config) ->
     application:ensure_all_started(otters),
@@ -19,6 +19,26 @@ ptest(_Config) ->
     ottersp:log("started"),
     ottersp:log("α =:= ω"),
     ottersp:tag("result", "ok"),
+    ottersp:finish(),
+    timer:sleep(200),
+    ?assert(meck:validate(ibrowse)),
+    meck:unload(ibrowse).
+
+ptest_push(_Config) ->
+    application:ensure_all_started(otters),
+    application:set_env(otters, zipkin_collector_uri,
+                        "http://127.0.0.1:19411/api/v1/spans"),
+
+    meck:new(ibrowse, [passthrough]),
+    meck:expect(ibrowse, send_req, fun send_req/4),
+
+    ottersp:start("test_span"),
+    ottersp:log("started"),
+    ottersp:log("α =:= ω"),
+    ottersp:tag("result", "ok"),
+    ottersp:push(),
+    ?assertEqual(undefined, ottersp:get_span()),
+    ottersp:pop(),
     ottersp:finish(),
     timer:sleep(200),
     ?assert(meck:validate(ibrowse)),

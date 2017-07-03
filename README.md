@@ -358,7 +358,11 @@ There is no configuration involved in the stage of producing span data.
 The paramers mentioned above are functionally specific to the zipkin
 connector. It was simpler to explain them though in this context.
 
+Please also consult the cuttle fisch schema file `priv/otters.schema` for valid configuration options.
+
 ### Span Filtering
+
+The initial filter file can be configured with the `filter_file` app config value.
 
 When the collection of **span** information is completed (i.e. `finish` is called), filtering is invoked. Filtering is based on the
 tags collected in the span with the **span name** and the

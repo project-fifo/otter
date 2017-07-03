@@ -31,10 +31,14 @@
          log/1, log/2,
          finish/0,
          ids/0,
-         get_span/0
+         get_span/0,
+         push/0,
+         push/1,
+         pop/0
         ]).
 
 -define(KEY, otters_span_information).
+-define(SKEY, otters_span_stack).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -147,6 +151,63 @@ ids() ->
     Span = get(?KEY),
     otters:ids(Span).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retreivers the current span
+%% @end
+%%--------------------------------------------------------------------
 -spec get_span() -> otters:maybe_span().
 get_span() ->
     get(?KEY).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Pushes the current span on the span stack and replaces it with an
+%% emtpy/noop span.
+%% @end
+%%--------------------------------------------------------------------
+
+-spec push() -> otters:maybe_span().
+push() ->
+    push(undefined).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Pushes the current span on the span stack and replaces it the
+%% provided span.
+%% @end
+%%--------------------------------------------------------------------
+
+-spec push(otters:maybe_span()) -> otters:maybe_span().
+push(NewSpan) ->
+    Span = get(?KEY),
+    put(?KEY, NewSpan),
+    case get(?SKEY) of
+        undefined ->
+            put(?SKEY, [Span]);
+        Spans ->
+            put(?SKEY, [Span | Spans])
+    end,
+    Span.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Pops the head of the span stack and returns it. If the stack
+%% is emtpy 'undefined' / noop is reutrn. poping more often then
+%% pushing does no harm.
+%% @end
+%%--------------------------------------------------------------------
+-spec pop() -> otters:maybe_span().
+pop() ->
+    OldSpan = get(?KEY),
+    NewSpan = case get(?SKEY) of
+                  undefined ->
+                      undefined;
+                  [] ->
+                      undefined;
+                  [Span | Spans] ->
+                      put(?SKEY, Spans),
+                      Span
+              end,
+    put(?KEY, NewSpan),
+    OldSpan. 

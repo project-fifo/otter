@@ -103,7 +103,8 @@ start(Name, TraceId, ParentId)
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts a new span as a child of a existing span, using the parents
-%% Trace ID and setting the childs parent to the parents Span ID
+%% Trace ID or a `{trace_id, parent_id}` tuple and setting the childs
+%% parent to the parents Span ID
 %% @end
 %%--------------------------------------------------------------------
 -spec start_child(info(), maybe_span() |
@@ -145,7 +146,7 @@ tag(Span= #span{}, Key, Value, Service) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Adds a tag to a span, possibly overwriting the existing value.
+%% Adds a log to a span.
 %% @end
 %%--------------------------------------------------------------------
 -spec log(maybe_span(), info()) -> maybe_span().
@@ -158,8 +159,7 @@ log(Span = #span{logs = Logs}, Text) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Adds a log to a span with a given service, possibly overwriting
-%% the existing value.
+%% Adds a log to a span with a given service.
 %% @end
 %%--------------------------------------------------------------------
 -spec log(maybe_span(), info(), service()) -> maybe_span().
@@ -173,12 +173,13 @@ log(Span = #span{logs = Logs}, Text, Service) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Ends a span and prepares queues it to be dispatched to the trace
-%% server.
+%% server. This is also where filtering happens, it's the most
+%% expensive  part of tracing.
 %% @end
 %%--------------------------------------------------------------------
 -spec finish(maybe_span()) -> ok.
 finish(undefined) ->
-    undefined;
+    ok;
 finish(Span = #span{logs = Logs, timestamp = Start}) ->
     ol:span(
       Span#span{
@@ -189,7 +190,8 @@ finish(Span = #span{logs = Logs, timestamp = Start}) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrives the Trace ID and the Span ID from a span.
+%% Retrives the Trace ID and the Span ID from a span. This can
+%% be used for start_child/2
 %% @end
 %%--------------------------------------------------------------------
 -spec ids(maybe_span()) -> {TraceID::trace_id(), SpanID::span_id()} | undefined.
